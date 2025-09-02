@@ -38,6 +38,60 @@ export type Database = {
         }
         Relationships: []
       }
+      draw_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
+          facility_id: string
+          id: string
+          required_docs_ok: boolean
+          status: Database["public"]["Enums"]["decision_status"]
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          facility_id: string
+          id?: string
+          required_docs_ok?: boolean
+          status?: Database["public"]["Enums"]["decision_status"]
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          facility_id?: string
+          id?: string
+          required_docs_ok?: boolean
+          status?: Database["public"]["Enums"]["decision_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draw_requests_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_requests_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal"
+            referencedColumns: ["facility_id"]
+          },
+        ]
+      }
       facilities: {
         Row: {
           apr: number
@@ -187,6 +241,7 @@ export type Database = {
         | "lender_analyst"
         | "borrower_admin"
         | "borrower_user"
+      decision_status: "submitted" | "under_review" | "approved" | "rejected"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
       txn_type:
@@ -330,6 +385,7 @@ export const Constants = {
         "borrower_admin",
         "borrower_user",
       ],
+      decision_status: ["submitted", "under_review", "approved", "rejected"],
       facility_status: ["active", "paused", "closed"],
       facility_type: ["revolving", "single_loan"],
       txn_type: [
