@@ -14,16 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      customers: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          legal_name: string
+          tax_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          legal_name: string
+          tax_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          legal_name?: string
+          tax_id?: string | null
+        }
+        Relationships: []
+      }
+      facilities: {
+        Row: {
+          apr: number
+          created_at: string
+          created_by: string | null
+          credit_limit: number
+          customer_id: string
+          id: string
+          min_advance: number
+          status: Database["public"]["Enums"]["facility_status"]
+          type: Database["public"]["Enums"]["facility_type"]
+        }
+        Insert: {
+          apr?: number
+          created_at?: string
+          created_by?: string | null
+          credit_limit: number
+          customer_id: string
+          id?: string
+          min_advance?: number
+          status?: Database["public"]["Enums"]["facility_status"]
+          type?: Database["public"]["Enums"]["facility_type"]
+        }
+        Update: {
+          apr?: number
+          created_at?: string
+          created_by?: string | null
+          credit_limit?: number
+          customer_id?: string
+          id?: string
+          min_advance?: number
+          status?: Database["public"]["Enums"]["facility_status"]
+          type?: Database["public"]["Enums"]["facility_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facilities_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          full_name: string | null
+          id: string
+          is_active: boolean
+          role: Database["public"]["Enums"]["app_role"]
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          full_name?: string | null
+          id: string
+          is_active?: boolean
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          full_name?: string | null
+          id?: string
+          is_active?: boolean
+          role?: Database["public"]["Enums"]["app_role"]
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          effective_at: string
+          facility_id: string
+          id: string
+          memo: string | null
+          type: Database["public"]["Enums"]["txn_type"]
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          effective_at: string
+          facility_id: string
+          id?: string
+          memo?: string | null
+          type: Database["public"]["Enums"]["txn_type"]
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string
+          facility_id?: string
+          id?: string
+          memo?: string | null
+          type?: Database["public"]["Enums"]["txn_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal"
+            referencedColumns: ["facility_id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      facility_principal: {
+        Row: {
+          facility_id: string | null
+          principal_outstanding: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      is_borrower: {
+        Args: { uid: string }
+        Returns: boolean
+      }
+      is_lender: {
+        Args: { uid: string }
+        Returns: boolean
+      }
+      user_customer_id: {
+        Args: { uid: string }
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "lender_admin"
+        | "lender_analyst"
+        | "borrower_admin"
+        | "borrower_user"
+      facility_status: "active" | "paused" | "closed"
+      facility_type: "revolving" | "single_loan"
+      txn_type:
+        | "advance"
+        | "payment"
+        | "interest"
+        | "fee"
+        | "letter_of_credit"
+        | "dof"
+        | "adjustment"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +323,24 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "lender_admin",
+        "lender_analyst",
+        "borrower_admin",
+        "borrower_user",
+      ],
+      facility_status: ["active", "paused", "closed"],
+      facility_type: ["revolving", "single_loan"],
+      txn_type: [
+        "advance",
+        "payment",
+        "interest",
+        "fee",
+        "letter_of_credit",
+        "dof",
+        "adjustment",
+      ],
+    },
   },
 } as const
