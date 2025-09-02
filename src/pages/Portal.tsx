@@ -29,7 +29,7 @@ export default function Portal() {
 
         // 2) Fetch the profile for this user and read the role
         const userId = session.user.id;
-        const { data: profile, error } = await supabase
+        const { data: profile, error } = await (supabase as any)
           .from('profiles')
           .select('role')
           .eq('id', userId)
