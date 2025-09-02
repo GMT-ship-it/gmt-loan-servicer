@@ -7,6 +7,13 @@ import { Button } from '@/components/ui/button';
 type Profile = { role: 'borrower_admin'|'borrower_user'|'lender_admin'|'lender_analyst'; customer_id: string | null };
 type Customer = { id: string; legal_name: string };
 type Facility = { id: string; type: 'revolving' | 'single_loan'; credit_limit: number; apr: number };
+type Tx = {
+  id: string;
+  type: 'advance' | 'payment' | 'interest' | 'fee' | 'letter_of_credit' | 'dof' | 'adjustment';
+  amount: number;
+  effective_at: string; // ISO
+  memo: string | null;
+};
 
 export default function BorrowerPage() {
   const navigate = useNavigate();
@@ -16,6 +23,7 @@ export default function BorrowerPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [facility, setFacility] = useState<Facility | null>(null);
   const [principal, setPrincipal] = useState<number | null>(null);
+  const [txs, setTxs] = useState<Tx[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -77,6 +85,19 @@ export default function BorrowerPage() {
             setErr(prErr.message);
           } else {
             setPrincipal(princRow?.principal_outstanding ?? 0);
+          }
+
+          // 3) Load transactions for this facility
+          const { data: txRows, error: txErr } = await supabase
+            .from('transactions')
+            .select('id, type, amount, effective_at, memo')
+            .eq('facility_id', fac.id)
+            .order('effective_at', { ascending: false });
+
+          if (txErr) {
+            setErr(txErr.message);
+          } else {
+            setTxs(txRows || []);
           }
         } else {
           setPrincipal(0);
@@ -144,6 +165,32 @@ export default function BorrowerPage() {
                 </span>
               </div>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Transactions</CardTitle></CardHeader>
+        <CardContent>
+          {(!txs || txs.length === 0) ? (
+            <div className="text-muted-foreground">No transactions yet.</div>
+          ) : (
+            <div className="grid gap-3">
+              {txs.map(t => (
+                <div key={t.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
+                  <div className="space-y-0.5">
+                    <div className="font-medium capitalize">{t.type.replace(/_/g,' ')}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(t.effective_at).toLocaleString()}
+                      {t.memo ? ` • ${t.memo}` : ''}
+                    </div>
+                  </div>
+                  <div className="font-medium">
+                    {t.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
