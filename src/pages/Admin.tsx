@@ -9,13 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Facility } from '@/types/facility';
 
 type Customer = { id: string; legal_name: string; };
+type FacilityRow = { id: string; customer_id: string; };
 
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [facilitiesList, setFacilitiesList] = useState<FacilityRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [facilityForm, setFacilityForm] = useState<{
     customer_id: string;
     type: 'revolving' | 'single_loan';
@@ -28,6 +31,19 @@ export default function AdminPage() {
     credit_limit: '500000',
     apr: '0.145',
     min_advance: '50000'
+  });
+  const [txForm, setTxForm] = useState<{
+    facility_id: string;
+    type: 'advance' | 'payment' | 'interest' | 'fee' | 'letter_of_credit' | 'dof' | 'adjustment';
+    amount: string;
+    effective_at: string; // ISO datetime-local
+    memo: string;
+  }>({
+    facility_id: '',
+    type: 'advance',
+    amount: '100000',
+    effective_at: new Date().toISOString().slice(0,16), // YYYY-MM-DDTHH:mm
+    memo: 'Initial funding'
   });
 
   useEffect(() => {
@@ -58,6 +74,15 @@ export default function AdminPage() {
 
       if (error) setErr(error.message);
       else setCustomers(data || []);
+
+      // Load facilities (lenders see all; RLS handles scope)
+      const { data: facs, error: fErr } = await supabase
+        .from('facilities')
+        .select('id, customer_id')
+        .order('created_at', { ascending: false });
+
+      if (!fErr && facs) setFacilitiesList(facs);
+
       setLoading(false);
     })();
   }, [navigate]);
@@ -103,6 +128,37 @@ export default function AdminPage() {
       setFacilityForm(f => ({ ...f, credit_limit: '500000', apr: '0.145', min_advance: '50000' }));
     }
     setCreating(false);
+  }
+
+  async function postTransaction(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!txForm.facility_id) { setErr('Select a facility'); return; }
+
+    const amt = Number(txForm.amount);
+    if (Number.isNaN(amt) || amt < 0) { setErr('Enter a valid amount ≥ 0'); return; }
+
+    setPosting(true);
+
+    // convert datetime-local input to ISO with timezone (assume local)
+    const local = txForm.effective_at;
+    // If you want server time, you could use `now()` from SQL, but we'll pass the ISO:
+    const effectiveISO = new Date(local).toISOString();
+
+    const { error } = await supabase.from('transactions').insert({
+      facility_id: txForm.facility_id,
+      type: txForm.type,
+      amount: amt,
+      effective_at: effectiveISO,
+      memo: txForm.memo || null
+    });
+
+    setPosting(false);
+
+    if (error) { setErr(error.message); return; }
+
+    // reset amount/memo (keep facility/type/date)
+    setTxForm(f => ({ ...f, amount: '', memo: '' }));
   }
 
   async function logout() {
@@ -215,6 +271,91 @@ export default function AdminPage() {
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={!canSubmit || creating}>
                 {creating ? 'Creating…' : 'Create Facility'}
+              </Button>
+              {err && <span className="text-destructive">{err}</span>}
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Post Transaction</CardTitle></CardHeader>
+        <CardContent>
+          <form onSubmit={postTransaction} className="grid gap-4">
+            {/* Facility select */}
+            <div className="grid gap-2">
+              <Label>Facility</Label>
+              <Select
+                value={txForm.facility_id}
+                onValueChange={(v) => setTxForm(f => ({ ...f, facility_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select facility" />
+                </SelectTrigger>
+                <SelectContent>
+                  {facilitiesList.map(f => (
+                    <SelectItem key={f.id} value={f.id}>{f.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Type */}
+            <div className="grid gap-2">
+              <Label>Type</Label>
+              <Select
+                value={txForm.type}
+                onValueChange={(v: any) => setTxForm(f => ({ ...f, type: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="advance">Advance</SelectItem>
+                  <SelectItem value="payment">Payment</SelectItem>
+                  <SelectItem value="interest">Interest</SelectItem>
+                  <SelectItem value="fee">Fee</SelectItem>
+                  <SelectItem value="letter_of_credit">Letter of Credit</SelectItem>
+                  <SelectItem value="dof">DOF</SelectItem>
+                  <SelectItem value="adjustment">Adjustment</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Amount */}
+            <div className="grid gap-2">
+              <Label>Amount (USD)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={txForm.amount}
+                onChange={(e) => setTxForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+
+            {/* Effective at */}
+            <div className="grid gap-2">
+              <Label>Effective Date/Time</Label>
+              <Input
+                type="datetime-local"
+                value={txForm.effective_at}
+                onChange={(e) => setTxForm(f => ({ ...f, effective_at: e.target.value }))}
+              />
+            </div>
+
+            {/* Memo */}
+            <div className="grid gap-2">
+              <Label>Memo</Label>
+              <Input
+                type="text"
+                value={txForm.memo}
+                onChange={(e) => setTxForm(f => ({ ...f, memo: e.target.value }))}
+                placeholder="Optional description"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={posting || !txForm.facility_id}>
+                {posting ? 'Posting…' : 'Post Transaction'}
               </Button>
               {err && <span className="text-destructive">{err}</span>}
             </div>
