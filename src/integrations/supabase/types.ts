@@ -168,6 +168,7 @@ export type Database = {
           amount: number
           created_at: string
           created_by: string | null
+          draw_request_id: string | null
           effective_at: string
           facility_id: string
           id: string
@@ -178,6 +179,7 @@ export type Database = {
           amount: number
           created_at?: string
           created_by?: string | null
+          draw_request_id?: string | null
           effective_at: string
           facility_id: string
           id?: string
@@ -188,6 +190,7 @@ export type Database = {
           amount?: number
           created_at?: string
           created_by?: string | null
+          draw_request_id?: string | null
           effective_at?: string
           facility_id?: string
           id?: string
@@ -195,6 +198,13 @@ export type Database = {
           type?: Database["public"]["Enums"]["txn_type"]
         }
         Relationships: [
+          {
+            foreignKeyName: "transactions_draw_request_id_fkey"
+            columns: ["draw_request_id"]
+            isOneToOne: false
+            referencedRelation: "draw_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transactions_facility_id_fkey"
             columns: ["facility_id"]
