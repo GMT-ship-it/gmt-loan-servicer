@@ -10,15 +10,27 @@ import type { Facility } from '@/types/facility';
 
 type Customer = { id: string; legal_name: string; };
 type FacilityRow = { id: string; customer_id: string; };
+type DrawRow = {
+  id: string;
+  facility_id: string;
+  amount: number;
+  status: 'submitted'|'under_review'|'approved'|'rejected';
+  decision_notes: string | null;
+  required_docs_ok: boolean;
+  created_at: string;
+};
 
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [facilitiesList, setFacilitiesList] = useState<FacilityRow[]>([]);
+  const [draws, setDraws] = useState<DrawRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [facilityForm, setFacilityForm] = useState<{
     customer_id: string;
     type: 'revolving' | 'single_loan';
@@ -82,6 +94,15 @@ export default function AdminPage() {
         .order('created_at', { ascending: false });
 
       if (!fErr && facs) setFacilitiesList(facs);
+
+      // Load draw requests (lenders see all per RLS)
+      const { data: drs, error: drErr } = await supabase
+        .from('draw_requests')
+        .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
+        .order('created_at', { ascending: false });
+
+      if (drErr) setErr(drErr.message);
+      else setDraws(drs || []);
 
       setLoading(false);
     })();
@@ -159,6 +180,41 @@ export default function AdminPage() {
 
     // reset amount/memo (keep facility/type/date)
     setTxForm(f => ({ ...f, amount: '', memo: '' }));
+  }
+
+  async function decideDraw(id: string, newStatus: 'approved'|'rejected') {
+    setDecidingId(id);
+    setErr(null);
+
+    const notes = decisionNotes[id] ?? null;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setErr('Not authenticated'); setDecidingId(null); return; }
+
+    const { error } = await supabase
+      .from('draw_requests')
+      .update({
+        status: newStatus,
+        decision_notes: notes,
+        decided_by: session.user.id,
+        decided_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    setDecidingId(null);
+
+    if (error) { setErr(error.message); return; }
+
+    // refresh list
+    const { data: drs, error: rErr } = await supabase
+      .from('draw_requests')
+      .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
+      .order('created_at', { ascending: false });
+    if (!rErr) setDraws(drs || []);
+  }
+
+  function setNotes(id: string, v: string) {
+    setDecisionNotes(prev => ({ ...prev, [id]: v }));
   }
 
   async function logout() {
@@ -360,6 +416,63 @@ export default function AdminPage() {
               {err && <span className="text-destructive">{err}</span>}
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Approvals — Draw Requests</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {draws.length === 0 ? (
+            <div className="text-muted-foreground">No draw requests yet.</div>
+          ) : (
+            <div className="grid gap-4">
+              {draws.map(d => (
+                <div key={d.id} className="border rounded p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm">
+                      <div className="font-medium">
+                        {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Facility: <span className="font-mono">{d.facility_id}</span> • {new Date(d.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-xs uppercase tracking-wide">{d.status}</div>
+                  </div>
+
+                  <div className="grid gap-1">
+                    <label className="text-sm">Decision notes (optional)</label>
+                    <Input
+                      value={decisionNotes[d.id] ?? d.decision_notes ?? ''}
+                      onChange={(e)=>setNotes(d.id, e.target.value)}
+                      placeholder="Reason or internal notes"
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={decidingId === d.id || d.status === 'approved'}
+                      onClick={()=>decideDraw(d.id, 'approved')}
+                    >
+                      {decidingId === d.id ? 'Saving…' : 'Approve'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={decidingId === d.id || d.status === 'rejected'}
+                      onClick={()=>decideDraw(d.id, 'rejected')}
+                    >
+                      {decidingId === d.id ? 'Saving…' : 'Reject'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {err && <div className="text-destructive mt-3">{err}</div>}
         </CardContent>
       </Card>
     </div>
