@@ -20,6 +20,16 @@ type DrawRow = {
   created_at: string;
 };
 
+type DrawDocRow = {
+  id: string;
+  path: string;
+  original_name: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  uploaded_at: string;
+  draw_request_id: string;
+};
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -31,6 +41,8 @@ export default function AdminPage() {
   const [posting, setPosting] = useState(false);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
+  const [docsByDraw, setDocsByDraw] = useState<Record<string, DrawDocRow[]>>({});
+  const [togglingDocsOk, setTogglingDocsOk] = useState<string | null>(null);
   const [facilityForm, setFacilityForm] = useState<{
     customer_id: string;
     type: 'revolving' | 'single_loan';
@@ -102,11 +114,64 @@ export default function AdminPage() {
         .order('created_at', { ascending: false });
 
       if (drErr) setErr(drErr.message);
-      else setDraws(drs || []);
+      else {
+        setDraws(drs || []);
+        await fetchDocsForDraws((drs || []).map(d => d.id));
+      }
 
       setLoading(false);
     })();
   }, [navigate]);
+
+  async function fetchDocsForDraws(drawIds: string[]) {
+    if (drawIds.length === 0) { setDocsByDraw({}); return; }
+    const { data, error } = await supabase
+      .from('draw_documents')
+      .select('id, path, original_name, mime_type, size_bytes, uploaded_at, draw_request_id')
+      .in('draw_request_id', drawIds)
+      .order('uploaded_at', { ascending: false });
+
+    if (!error) {
+      const grouped: Record<string, DrawDocRow[]> = {};
+      (data || []).forEach(d => {
+        if (!grouped[d.draw_request_id]) grouped[d.draw_request_id] = [];
+        grouped[d.draw_request_id].push(d);
+      });
+      setDocsByDraw(grouped);
+    }
+  }
+
+  async function getSignedUrl(path: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .storage
+      .from('summitline-docs')
+      .createSignedUrl(path, 60 * 10); // 10 minutes
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  }
+
+  async function toggleDocsOk(drawId: string, nextVal: boolean) {
+    setTogglingDocsOk(drawId);
+    const { error } = await supabase
+      .from('draw_requests')
+      .update({ required_docs_ok: nextVal })
+      .eq('id', drawId);
+
+    setTogglingDocsOk(null);
+
+    if (error) { setErr(error.message); return; }
+
+    // refresh draws + docs
+    const { data: drs, error: rErr } = await supabase
+      .from('draw_requests')
+      .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
+      .order('created_at', { ascending: false });
+
+    if (!rErr) {
+      setDraws(drs || []);
+      await fetchDocsForDraws((drs || []).map(d => d.id));
+    }
+  }
 
   const canSubmit = useMemo(() => {
     if (!facilityForm.customer_id) return false;
@@ -210,7 +275,10 @@ export default function AdminPage() {
       .from('draw_requests')
       .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
       .order('created_at', { ascending: false });
-    if (!rErr) setDraws(drs || []);
+    if (!rErr) {
+      setDraws(drs || []);
+      await fetchDocsForDraws((drs || []).map(d => d.id));
+    }
   }
 
   function setNotes(id: string, v: string) {
@@ -452,11 +520,56 @@ export default function AdminPage() {
                     />
                   </div>
 
+                  {/* Documents section */}
+                  <div className="grid gap-1">
+                    <div className="font-medium text-sm">Documents</div>
+                    {Array.isArray(docsByDraw[d.id]) && docsByDraw[d.id].length > 0 ? (
+                      <div className="grid gap-1">
+                        {docsByDraw[d.id].map(doc => (
+                          <div key={doc.id} className="flex items-center justify-between text-sm">
+                            <div className="truncate">
+                              {(doc.original_name || doc.path.split('/').pop())}
+                              <span className="text-xs text-muted-foreground">
+                                {' '}• {doc.mime_type || 'file'} • {(doc.size_bytes ?? 0).toLocaleString()} bytes
+                              </span>
+                            </div>
+                            <button
+                              className="text-xs underline"
+                              onClick={async () => {
+                                const url = await getSignedUrl(doc.path);
+                                if (url) window.open(url, '_blank');
+                              }}
+                            >
+                              Download
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">No documents uploaded.</div>
+                    )}
+                  </div>
+
+                  {/* Docs OK toggle */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <label className="text-sm flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!d.required_docs_ok}
+                        onChange={(e)=>toggleDocsOk(d.id, e.target.checked)}
+                        disabled={togglingDocsOk === d.id}
+                      />
+                      Required docs OK
+                    </label>
+                    {togglingDocsOk === d.id && <span className="text-xs">Saving…</span>}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      disabled={decidingId === d.id || d.status === 'approved'}
+                      disabled={decidingId === d.id || d.status === 'approved' || !d.required_docs_ok}
                       onClick={()=>decideDraw(d.id, 'approved')}
+                      title={!d.required_docs_ok ? 'Mark Required docs OK before approval' : undefined}
                     >
                       {decidingId === d.id ? 'Saving…' : 'Approve'}
                     </Button>
