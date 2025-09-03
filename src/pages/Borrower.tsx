@@ -29,6 +29,19 @@ type DrawDoc = {
   uploaded_at: string; 
 };
 
+type BbcStatus = 'draft'|'submitted'|'under_review'|'approved'|'rejected';
+type BbcReport = {
+  id: string; facility_id: string; period_end: string; status: BbcStatus;
+  gross_collateral: number; ineligibles: number; reserves: number;
+  advance_rate: number; borrowing_base: number; availability: number; created_at: string;
+};
+type BbcItemType = 'accounts_receivable'|'inventory'|'cash'|'other';
+type BbcItem = {
+  id: string; report_id: string; item_type: BbcItemType;
+  ref: string|null; note: string|null; amount: number;
+  ineligible: boolean; haircut_rate: number; created_at: string;
+};
+
 export default function BorrowerPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -52,6 +65,17 @@ export default function BorrowerPage() {
   const [docs, setDocs] = useState<DrawDoc[]>([]);
   const [filesToUpload, setFilesToUpload] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // BBC state
+  const [bbc, setBbc] = useState<BbcReport | null>(null);
+  const [bbcItems, setBbcItems] = useState<BbcItem[]>([]);
+  const [bbcPeriodEnd, setBbcPeriodEnd] = useState<string>(new Date().toISOString().slice(0,10));
+  const [creatingBbc, setCreatingBbc] = useState(false);
+
+  const [itemForm, setItemForm] = useState({
+    item_type: 'accounts_receivable' as BbcItemType,
+    ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000'
+  });
 
   // Validation helpers
   const reqAmt = Number(drawAmount || '0');
@@ -171,6 +195,28 @@ export default function BorrowerPage() {
               setDocs([]);
             }
           }
+
+          // 6) Load BBC for this facility
+          const { data: rep } = await supabase
+            .from('borrowing_base_reports')
+            .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+            .eq('facility_id', fac.id)
+            .order('period_end', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          setBbc(rep || null);
+
+          if (rep?.id) {
+            const { data: items } = await supabase
+              .from('borrowing_base_items')
+              .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+              .eq('report_id', rep.id)
+              .order('created_at', { ascending: false });
+            setBbcItems(items || []);
+          } else {
+            setBbcItems([]);
+          }
         } else {
           setPrincipal(0);
         }
@@ -288,6 +334,73 @@ export default function BorrowerPage() {
     setErr(null);
     setDrawAmount('50000');
     setDrawMemo('Working capital');
+  }
+
+  async function createBbc(e: React.FormEvent) {
+    e.preventDefault();
+    if (!facility?.id) { setErr('No facility found'); return; }
+    setCreatingBbc(true); setErr(null);
+
+    const { data, error } = await supabase
+      .from('borrowing_base_reports')
+      .insert({
+        facility_id: facility.id,
+        period_end: bbcPeriodEnd,
+        status: 'draft',
+        advance_rate: 0.80
+      })
+      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+      .single();
+
+    setCreatingBbc(false);
+    if (error) { setErr(error.message); return; }
+    setBbc(data);
+    setBbcItems([]);
+  }
+
+  async function addBbcItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!bbc?.id) { setErr('Create a BBC first'); return; }
+    setErr(null);
+    const amt = Number(itemForm.amount);
+    const hr  = Number(itemForm.haircut_rate);
+    if (!(amt > 0)) { setErr('Enter amount > 0'); return; }
+    if (Number.isNaN(hr) || hr < 0 || hr > 1) { setErr('Haircut must be between 0 and 1'); return; }
+
+    const { error } = await supabase.from('borrowing_base_items').insert({
+      report_id: bbc.id, item_type: itemForm.item_type as BbcItemType,
+      ref: itemForm.ref || null, note: itemForm.note || null,
+      amount: amt, ineligible: itemForm.ineligible, haircut_rate: hr
+    });
+    if (error) { setErr(error.message); return; }
+
+    const [{ data: items }, { data: rep }] = await Promise.all([
+      supabase.from('borrowing_base_items')
+        .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+        .eq('report_id', bbc.id).order('created_at', { ascending: false }),
+      supabase.from('borrowing_base_reports')
+        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+        .eq('id', bbc.id).single()
+    ]);
+    setBbcItems(items || []);
+    if (rep) setBbc(rep);
+
+    setItemForm(f => ({ ...f, ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000' }));
+  }
+
+  async function submitBbc() {
+    if (!bbc?.id) return;
+    const { error } = await supabase
+      .from('borrowing_base_reports')
+      .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+      .eq('id', bbc.id);
+    if (error) { setErr(error.message); return; }
+
+    const { data: rep } = await supabase
+      .from('borrowing_base_reports')
+      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+      .eq('id', bbc.id).single();
+    if (rep) setBbc(rep);
   }
 
   if (loading) return <div className="p-6">Loading borrower…</div>;
@@ -522,6 +635,127 @@ export default function BorrowerPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Borrowing Base Certificate (BBC)</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          {!bbc ? (
+            <form onSubmit={createBbc} className="grid gap-3">
+              <div className="grid gap-1">
+                <label className="text-sm">Period End</label>
+                <input type="date" value={bbcPeriodEnd}
+                       onChange={(e)=>setBbcPeriodEnd(e.target.value)}
+                       className="border rounded px-3 py-2" />
+              </div>
+              <div>
+                <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
+                        disabled={creatingBbc || !facility?.id}>
+                  {creatingBbc ? 'Creating…' : 'Create BBC'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              {/* Header snapshot */}
+              <div className="grid gap-1 text-sm">
+                <div className="flex justify-between"><span>Status</span><span className="font-medium uppercase">{bbc.status}</span></div>
+                <div className="flex justify-between"><span>Period End</span><span className="font-medium">{bbc.period_end}</span></div>
+                <div className="flex justify-between"><span>Gross Collateral</span><span className="font-medium">{bbc.gross_collateral.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                <div className="flex justify-between"><span>Ineligibles</span><span className="font-medium">{bbc.ineligibles.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                <div className="flex justify-between"><span>Reserves</span><span className="font-medium">{bbc.reserves.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                <div className="flex justify-between"><span>Borrowing Base</span><span className="font-medium">{bbc.borrowing_base.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                <div className="flex justify-between"><span>Availability (BBC)</span><span className="font-medium">{bbc.availability.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+              </div>
+
+              {/* Add line item (draft/submitted) */}
+              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
+                <form onSubmit={addBbcItem} className="grid gap-3 pt-2">
+                  <div className="grid gap-1">
+                    <label className="text-sm">Type</label>
+                    <select value={itemForm.item_type}
+                            onChange={(e)=>setItemForm(f=>({...f, item_type: e.target.value as BbcItemType}))}
+                            className="border rounded px-3 py-2">
+                      <option value="accounts_receivable">Accounts Receivable</option>
+                      <option value="inventory">Inventory</option>
+                      <option value="cash">Cash</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm">Reference</label>
+                    <input className="border rounded px-3 py-2"
+                           value={itemForm.ref}
+                           onChange={(e)=>setItemForm(f=>({...f, ref: e.target.value}))}/>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm">Note</label>
+                    <input className="border rounded px-3 py-2"
+                           value={itemForm.note}
+                           onChange={(e)=>setItemForm(f=>({...f, note: e.target.value}))}/>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm">Amount (USD)</label>
+                    <input type="number" min="0" step="0.01" className="border rounded px-3 py-2"
+                           value={itemForm.amount}
+                           onChange={(e)=>setItemForm(f=>({...f, amount: e.target.value}))}/>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="text-sm">Haircut Rate (0–1)</label>
+                    <input type="number" min="0" max="1" step="0.0001" className="border rounded px-3 py-2"
+                           value={itemForm.haircut_rate}
+                           onChange={(e)=>setItemForm(f=>({...f, haircut_rate: e.target.value}))}/>
+                  </div>
+                  <label className="text-sm inline-flex items-center gap-2">
+                    <input type="checkbox"
+                           checked={itemForm.ineligible}
+                           onChange={(e)=>setItemForm(f=>({...f, ineligible: e.target.checked}))}/>
+                    Mark ineligible
+                  </label>
+                  <div>
+                    <button className="px-4 py-2 rounded bg-primary text-primary-foreground">Add Item</button>
+                  </div>
+                </form>
+              )}
+
+              {/* Items list */}
+              <div className="pt-2">
+                <div className="font-medium mb-2">Items</div>
+                {bbcItems.length === 0 ? (
+                  <div className="text-muted-foreground">No items yet.</div>
+                ) : (
+                  <div className="grid gap-2">
+                    {bbcItems.map(it => (
+                      <div key={it.id} className="flex items-center justify-between border-b pb-2 last:border-b-0 text-sm">
+                        <div className="truncate">
+                          <span className="font-medium capitalize">{it.item_type.replace('_',' ')}</span>
+                          {it.ref && <span> • {it.ref}</span>}
+                          {it.ineligible && <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800">Ineligible</span>}
+                          <div className="text-xs text-muted-foreground">{it.note || ''}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-medium">{it.amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}</div>
+                          {it.haircut_rate > 0 && (
+                            <div className="text-xs text-muted-foreground">Haircut {(it.haircut_rate*100).toFixed(2)}%</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
+                <div className="pt-2">
+                  <button className="px-4 py-2 rounded bg-primary text-primary-foreground" onClick={submitBbc}>
+                    Submit BBC for Review
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {err && <div className="text-destructive">{err}</div>}
         </CardContent>
       </Card>
     </div>
