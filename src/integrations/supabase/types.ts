@@ -83,13 +83,6 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "draw_requests_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal"
-            referencedColumns: ["facility_id"]
-          },
         ]
       }
       facilities: {
@@ -212,13 +205,6 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal"
-            referencedColumns: ["facility_id"]
-          },
         ]
       }
     }
@@ -228,7 +214,15 @@ export type Database = {
           facility_id: string | null
           principal_outstanding: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "transactions_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
