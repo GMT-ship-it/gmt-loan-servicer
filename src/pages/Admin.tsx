@@ -30,6 +30,36 @@ type DrawDocRow = {
   draw_request_id: string;
 };
 
+type BbcStatus = 'draft'|'submitted'|'under_review'|'approved'|'rejected';
+type AdminBbc = {
+  id: string;
+  facility_id: string;
+  period_end: string;   // ISO date
+  status: BbcStatus;
+  gross_collateral: number;
+  ineligibles: number;
+  reserves: number;
+  advance_rate: number;
+  borrowing_base: number;
+  availability: number;
+  created_at: string;
+  submitted_at: string | null;
+  decided_at: string | null;
+  decision_notes: string | null;
+};
+
+type AdminBbcItem = {
+  id: string;
+  report_id: string;
+  item_type: 'accounts_receivable'|'inventory'|'cash'|'other';
+  ref: string | null;
+  note: string | null;
+  amount: number;
+  ineligible: boolean;
+  haircut_rate: number;
+  created_at: string;
+};
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -74,6 +104,13 @@ export default function AdminPage() {
   const [interestFacilityId, setInterestFacilityId] = useState<string>('');
   const [postingInterest, setPostingInterest] = useState(false);
   const [interestMsg, setInterestMsg] = useState<string | null>(null);
+
+  // BBC state
+  const [bbcs, setBbcs] = useState<AdminBbc[]>([]);
+  const [bbcItemsById, setBbcItemsById] = useState<Record<string, AdminBbcItem[]>>({});
+  const [bbcExpanded, setBbcExpanded] = useState<Record<string, boolean>>({});
+  const [bbcNotes, setBbcNotes] = useState<Record<string, string>>({});
+  const [decidingBbcId, setDecidingBbcId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -123,6 +160,15 @@ export default function AdminPage() {
         setDraws(drs || []);
         await fetchDocsForDraws((drs || []).map(d => d.id));
       }
+
+      // Load recent BBCs (newest period first). Lender RLS lets you see all.
+      const { data: reps, error: repErr } = await supabase
+        .from('borrowing_base_reports')
+        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at, submitted_at, decided_at, decision_notes')
+        .order('period_end', { ascending: false })
+        .limit(50);
+
+      if (!repErr) setBbcs(reps || []);
 
       setLoading(false);
     })();
@@ -288,6 +334,58 @@ export default function AdminPage() {
 
   function setNotes(id: string, v: string) {
     setDecisionNotes(prev => ({ ...prev, [id]: v }));
+  }
+
+  async function loadBbcItems(reportId: string) {
+    if (bbcItemsById[reportId]) return; // already loaded
+    const { data, error } = await supabase
+      .from('borrowing_base_items')
+      .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+      .eq('report_id', reportId)
+      .order('created_at', { ascending: false });
+    if (!error) {
+      setBbcItemsById(prev => ({ ...prev, [reportId]: data || [] }));
+    }
+  }
+
+  async function toggleBbcExpand(id: string) {
+    const next = !bbcExpanded[id];
+    setBbcExpanded(prev => ({ ...prev, [id]: next }));
+    if (next) await loadBbcItems(id);
+  }
+
+  async function decideBbc(id: string, newStatus: 'approved'|'rejected') {
+    setDecidingBbcId(id);
+    setErr(null);
+    const notes = bbcNotes[id] ?? null;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setErr('Not authenticated'); setDecidingBbcId(null); return; }
+
+    const { error } = await supabase
+      .from('borrowing_base_reports')
+      .update({
+        status: newStatus,
+        decision_notes: notes,
+        decided_by: session.user.id,
+        decided_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    setDecidingBbcId(null);
+    if (error) { setErr(error.message); return; }
+
+    // Refresh list
+    const { data: reps, error: repErr } = await supabase
+      .from('borrowing_base_reports')
+      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at, submitted_at, decided_at, decision_notes')
+      .order('period_end', { ascending: false })
+      .limit(50);
+    if (!repErr) setBbcs(reps || []);
+  }
+
+  function setBbcDecisionNotes(id: string, v: string) {
+    setBbcNotes(prev => ({ ...prev, [id]: v }));
   }
 
   async function postInterestThroughToday(e: React.FormEvent) {
@@ -668,6 +766,106 @@ export default function AdminPage() {
               {err && <span className="text-destructive">{err}</span>}
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>BBC Review</CardTitle></CardHeader>
+        <CardContent>
+          {bbcs.length === 0 ? (
+            <div className="text-muted-foreground">No BBCs yet.</div>
+          ) : (
+            <div className="grid gap-4">
+              {bbcs.map(r => (
+                <div key={r.id} className="border rounded p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm">
+                      <div className="font-medium">
+                        Period End: {r.period_end} • Facility: <span className="font-mono">{r.facility_id}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Status: <span className="uppercase">{r.status}</span>
+                        {r.submitted_at && <> • Submitted {new Date(r.submitted_at).toLocaleString()}</>}
+                        {r.decided_at && <> • Decided {new Date(r.decided_at).toLocaleString()}</>}
+                      </div>
+                    </div>
+                    <Button variant="ghost" onClick={() => toggleBbcExpand(r.id)}>
+                      {bbcExpanded[r.id] ? 'Hide' : 'View'}
+                    </Button>
+                  </div>
+
+                  {bbcExpanded[r.id] && (
+                    <>
+                      {/* Totals snapshot */}
+                      <div className="grid gap-1 text-sm">
+                        <div className="flex justify-between"><span>Gross Collateral</span><span className="font-medium">{r.gross_collateral.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                        <div className="flex justify-between"><span>Ineligibles</span><span className="font-medium">{r.ineligibles.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                        <div className="flex justify-between"><span>Reserves</span><span className="font-medium">{r.reserves.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                        <div className="flex justify-between"><span>Advance Rate</span><span className="font-medium">{(r.advance_rate*100).toFixed(2)}%</span></div>
+                        <div className="flex justify-between"><span>Borrowing Base</span><span className="font-medium">{r.borrowing_base.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                        <div className="flex justify-between"><span>Availability (BBC)</span><span className="font-medium">{r.availability.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+                      </div>
+
+                      {/* Items */}
+                      <div className="pt-2">
+                        <div className="font-medium mb-2 text-sm">Items</div>
+                        {Array.isArray(bbcItemsById[r.id]) && bbcItemsById[r.id].length > 0 ? (
+                          <div className="grid gap-2">
+                            {bbcItemsById[r.id].map(it => (
+                              <div key={it.id} className="flex items-center justify-between border-b pb-2 last:border-b-0 text-sm">
+                                <div className="truncate">
+                                  <span className="font-medium capitalize">{it.item_type.replace('_',' ')}</span>
+                                  {it.ref && <span> • {it.ref}</span>}
+                                  {it.ineligible && <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800">Ineligible</span>}
+                                  <div className="text-xs text-muted-foreground">{it.note || ''}</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-medium">{it.amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}</div>
+                                  {it.haircut_rate > 0 && (
+                                    <div className="text-xs text-muted-foreground">Haircut {(it.haircut_rate*100).toFixed(2)}%</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground text-sm">No items.</div>
+                        )}
+                      </div>
+
+                      {/* Decision notes + actions */}
+                      <div className="grid gap-2 pt-2">
+                        <label className="text-sm">Decision notes</label>
+                        <Input
+                          className="text-sm"
+                          value={bbcNotes[r.id] ?? r.decision_notes ?? ''}
+                          onChange={(e)=>setBbcDecisionNotes(r.id, e.target.value)}
+                          placeholder="Reason or internal notes"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={decidingBbcId === r.id || r.status === 'approved'}
+                            onClick={()=>decideBbc(r.id, 'approved')}
+                          >
+                            {decidingBbcId === r.id ? 'Saving…' : 'Approve'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            disabled={decidingBbcId === r.id || r.status === 'rejected'}
+                            onClick={()=>decideBbc(r.id, 'rejected')}
+                          >
+                            {decidingBbcId === r.id ? 'Saving…' : 'Reject'}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {err && <div className="text-destructive mt-3">{err}</div>}
         </CardContent>
       </Card>
     </div>
