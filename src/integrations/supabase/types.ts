@@ -232,6 +232,10 @@ export type Database = {
       }
     }
     Functions: {
+      facility_available_to_draw: {
+        Args: { p_facility: string }
+        Returns: number
+      }
       is_borrower: {
         Args: { uid: string }
         Returns: boolean
