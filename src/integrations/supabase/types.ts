@@ -267,6 +267,10 @@ export type Database = {
       }
     }
     Functions: {
+      facility_accrued_interest: {
+        Args: { p_as_of?: string; p_facility: string }
+        Returns: number
+      }
       facility_available_to_draw: {
         Args: { p_facility: string }
         Returns: number
