@@ -70,6 +70,11 @@ export default function AdminPage() {
     memo: 'Initial funding'
   });
 
+  // Interest posting state
+  const [interestFacilityId, setInterestFacilityId] = useState<string>('');
+  const [postingInterest, setPostingInterest] = useState(false);
+  const [interestMsg, setInterestMsg] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -283,6 +288,49 @@ export default function AdminPage() {
 
   function setNotes(id: string, v: string) {
     setDecisionNotes(prev => ({ ...prev, [id]: v }));
+  }
+
+  async function postInterestThroughToday(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setInterestMsg(null);
+
+    if (!interestFacilityId) { setErr('Select a facility'); return; }
+
+    setPostingInterest(true);
+    try {
+      // 1) Ask server for accrued (unposted) interest as of today
+      const { data: accr, error: aErr } = await supabase
+        .rpc('facility_accrued_interest', { p_facility: interestFacilityId });
+
+      if (aErr) throw aErr;
+
+      const amount = Math.round(Number(accr ?? 0) * 100) / 100; // 2-dec rounding
+      if (!amount || amount <= 0) {
+        setInterestMsg('No accrued interest to post.');
+        return;
+      }
+
+      // 2) Insert interest transaction
+      const memo = `Interest posted through ${new Date().toISOString().slice(0,10)}`;
+      const { error: insErr } = await supabase
+        .from('transactions')
+        .insert({
+          facility_id: interestFacilityId,
+          type: 'interest',
+          amount,
+          effective_at: new Date().toISOString(),
+          memo
+        });
+
+      if (insErr) throw insErr;
+
+      setInterestMsg(`Posted interest: ${amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}`);
+    } catch (err: any) {
+      setErr(err.message || 'Failed to post interest');
+    } finally {
+      setPostingInterest(false);
+    }
   }
 
   async function logout() {
@@ -586,6 +634,40 @@ export default function AdminPage() {
             </div>
           )}
           {err && <div className="text-destructive mt-3">{err}</div>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Post Interest (through today)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={postInterestThroughToday} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Facility</Label>
+              <Select
+                value={interestFacilityId}
+                onValueChange={(v) => setInterestFacilityId(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select facility" />
+                </SelectTrigger>
+                <SelectContent>
+                  {facilitiesList.map(f => (
+                    <SelectItem key={f.id} value={f.id}>{f.id}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={!interestFacilityId || postingInterest}>
+                {postingInterest ? 'Posting…' : 'Post Interest'}
+              </Button>
+              {interestMsg && <span className="text-sm text-muted-foreground">{interestMsg}</span>}
+              {err && <span className="text-destructive">{err}</span>}
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>
