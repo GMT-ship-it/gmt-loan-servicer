@@ -14,6 +14,115 @@ export type Database = {
   }
   public: {
     Tables: {
+      borrowing_base_items: {
+        Row: {
+          amount: number
+          created_at: string
+          haircut_rate: number
+          id: string
+          ineligible: boolean
+          item_type: Database["public"]["Enums"]["bbc_item_type"]
+          note: string | null
+          ref: string | null
+          report_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          haircut_rate?: number
+          id?: string
+          ineligible?: boolean
+          item_type?: Database["public"]["Enums"]["bbc_item_type"]
+          note?: string | null
+          ref?: string | null
+          report_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          haircut_rate?: number
+          id?: string
+          ineligible?: boolean
+          item_type?: Database["public"]["Enums"]["bbc_item_type"]
+          note?: string | null
+          ref?: string | null
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borrowing_base_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "borrowing_base_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      borrowing_base_reports: {
+        Row: {
+          advance_rate: number
+          availability: number
+          borrowing_base: number
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
+          facility_id: string
+          gross_collateral: number
+          id: string
+          ineligibles: number
+          period_end: string
+          reserves: number
+          status: Database["public"]["Enums"]["bbc_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+        }
+        Insert: {
+          advance_rate?: number
+          availability?: number
+          borrowing_base?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          facility_id: string
+          gross_collateral?: number
+          id?: string
+          ineligibles?: number
+          period_end: string
+          reserves?: number
+          status?: Database["public"]["Enums"]["bbc_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+        }
+        Update: {
+          advance_rate?: number
+          availability?: number
+          borrowing_base?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          facility_id?: string
+          gross_collateral?: number
+          id?: string
+          ineligibles?: number
+          period_end?: string
+          reserves?: number
+          status?: Database["public"]["Enums"]["bbc_status"]
+          submitted_at?: string | null
+          submitted_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borrowing_base_reports_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -283,6 +392,10 @@ export type Database = {
         Args: { uid: string }
         Returns: boolean
       }
+      recalc_bbc_header: {
+        Args: { p_report: string }
+        Returns: undefined
+      }
       user_customer_id: {
         Args: { uid: string }
         Returns: string
@@ -294,6 +407,13 @@ export type Database = {
         | "lender_analyst"
         | "borrower_admin"
         | "borrower_user"
+      bbc_item_type: "accounts_receivable" | "inventory" | "cash" | "other"
+      bbc_status:
+        | "draft"
+        | "submitted"
+        | "under_review"
+        | "approved"
+        | "rejected"
       decision_status: "submitted" | "under_review" | "approved" | "rejected"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
@@ -437,6 +557,14 @@ export const Constants = {
         "lender_analyst",
         "borrower_admin",
         "borrower_user",
+      ],
+      bbc_item_type: ["accounts_receivable", "inventory", "cash", "other"],
+      bbc_status: [
+        "draft",
+        "submitted",
+        "under_review",
+        "approved",
+        "rejected",
       ],
       decision_status: ["submitted", "under_review", "approved", "rejected"],
       facility_status: ["active", "paused", "closed"],
