@@ -38,6 +38,47 @@ export type Database = {
         }
         Relationships: []
       }
+      draw_documents: {
+        Row: {
+          draw_request_id: string
+          id: string
+          mime_type: string | null
+          original_name: string | null
+          path: string
+          size_bytes: number | null
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          draw_request_id: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          path: string
+          size_bytes?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          draw_request_id?: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          path?: string
+          size_bytes?: number | null
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draw_documents_draw_request_id_fkey"
+            columns: ["draw_request_id"]
+            isOneToOne: false
+            referencedRelation: "draw_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       draw_requests: {
         Row: {
           amount: number
