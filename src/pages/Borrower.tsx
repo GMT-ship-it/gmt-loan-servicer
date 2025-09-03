@@ -20,6 +20,14 @@ type Draw = {
   status: 'submitted' | 'under_review' | 'approved' | 'rejected';
   created_at: string;
 };
+type DrawDoc = { 
+  id: string; 
+  path: string; 
+  original_name: string | null; 
+  mime_type: string | null; 
+  size_bytes: number | null; 
+  uploaded_at: string; 
+};
 
 export default function BorrowerPage() {
   const navigate = useNavigate();
@@ -37,6 +45,12 @@ export default function BorrowerPage() {
   const [drawMemo, setDrawMemo] = useState<string>('Working capital');
   const [postingDraw, setPostingDraw] = useState(false);
   const [draws, setDraws] = useState<Draw[]>([]);
+  
+  // Document upload state
+  const [activeDrawId, setActiveDrawId] = useState<string | null>(null);
+  const [docs, setDocs] = useState<DrawDoc[]>([]);
+  const [filesToUpload, setFilesToUpload] = useState<FileList | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   // Validation helpers
   const reqAmt = Number(drawAmount || '0');
@@ -132,7 +146,25 @@ export default function BorrowerPage() {
             .eq('facility_id', fac.id)
             .order('created_at', { ascending: false });
 
-          if (!drErr) setDraws(drs || []);
+          if (!drErr) {
+            setDraws(drs || []);
+            
+            // Load docs for latest submitted draw
+            const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
+            setActiveDrawId(latestSubmitted?.id ?? null);
+            
+            if (latestSubmitted?.id) {
+              const { data: dd, error: ddErr } = await supabase
+                .from('draw_documents')
+                .select('id, path, original_name, mime_type, size_bytes, uploaded_at')
+                .eq('draw_request_id', latestSubmitted.id)
+                .order('uploaded_at', { ascending: false });
+              
+              if (!ddErr) setDocs(dd || []);
+            } else {
+              setDocs([]);
+            }
+          }
         } else {
           setPrincipal(0);
         }
@@ -145,6 +177,67 @@ export default function BorrowerPage() {
   async function logout() {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
+  }
+
+  async function uploadDocs(e: React.FormEvent) {
+    e.preventDefault();
+    if (!facility?.id) { setErr('No facility found'); return; }
+    if (!activeDrawId) { setErr('No submitted draw to attach documents to.'); return; }
+    if (!filesToUpload || filesToUpload.length === 0) { setErr('Choose file(s) to upload.'); return; }
+
+    setErr(null);
+    setUploading(true);
+
+    try {
+      for (const file of Array.from(filesToUpload)) {
+        // 1) Choose a stable storage path: draws/<draw_id>/<timestamp>-<original>
+        const safeName = file.name.replace(/[^\w\-.]+/g, '_');
+        const path = `draws/${activeDrawId}/${Date.now()}-${safeName}`;
+
+        // 2) Insert metadata FIRST (RLS requires draw_documents row to exist before storage insert)
+        const { error: metaErr } = await supabase
+          .from('draw_documents')
+          .insert({
+            draw_request_id: activeDrawId,
+            path,
+            original_name: file.name,
+            mime_type: file.type || null,
+            size_bytes: file.size ?? null
+          });
+        if (metaErr) throw metaErr;
+
+        // 3) Upload the file to the same path
+        const { error: upErr } = await supabase
+          .storage
+          .from('summitline-docs')
+          .upload(path, file, { upsert: false });
+        if (upErr) throw upErr;
+      }
+
+      // 4) Refresh docs list
+      const { data: dd } = await supabase
+        .from('draw_documents')
+        .select('id, path, original_name, mime_type, size_bytes, uploaded_at')
+        .eq('draw_request_id', activeDrawId)
+        .order('uploaded_at', { ascending: false });
+
+      setDocs(dd || []);
+      setFilesToUpload(null);
+    } catch (err: any) {
+      setErr(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Helper to get a temporary download URL (signed) for a given path
+  async function getSignedUrl(path: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .storage
+      .from('summitline-docs')
+      .createSignedUrl(path, 60 * 10); // 10 minutes
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
   }
 
   async function submitDraw(e: React.FormEvent) {
@@ -180,6 +273,12 @@ export default function BorrowerPage() {
       .order('created_at', { ascending: false });
 
     setDraws(drs || []);
+    
+    // Update active draw and docs after creating new draw
+    const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
+    setActiveDrawId(latestSubmitted?.id ?? null);
+    setDocs([]); // New draw has no docs yet
+    
     setErr(null);
     setDrawAmount('50000');
     setDrawMemo('Working capital');
@@ -322,6 +421,70 @@ export default function BorrowerPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader><CardTitle>Upload Required Docs</CardTitle></CardHeader>
+        <CardContent className="grid gap-4">
+          {!activeDrawId ? (
+            <div className="text-muted-foreground">
+              No submitted draw found. Submit a draw request to attach documents.
+            </div>
+          ) : (
+            <>
+              <div className="text-sm">
+                Attaching to Draw ID: <span className="font-mono">{activeDrawId}</span>
+              </div>
+              <form onSubmit={uploadDocs} className="grid gap-3">
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setFilesToUpload(e.target.files)}
+                  className="border rounded px-3 py-2"
+                />
+                <div>
+                  <button
+                    type="submit"
+                    disabled={uploading || !filesToUpload || filesToUpload.length === 0}
+                    className="px-4 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50"
+                  >
+                    {uploading ? 'Uploading…' : 'Upload'}
+                  </button>
+                </div>
+              </form>
+            </>
+          )}
+
+          <div className="pt-2">
+            <div className="font-medium mb-2">Attached Files</div>
+            {docs.length === 0 ? (
+              <div className="text-muted-foreground">No documents uploaded yet.</div>
+            ) : (
+              <div className="grid gap-2">
+                {docs.map(d => (
+                  <div key={d.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
+                    <div className="text-sm">
+                      <div className="font-medium">{d.original_name || d.path.split('/').pop()}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(d.uploaded_at).toLocaleString()} • {d.mime_type || 'file'} • {(d.size_bytes ?? 0).toLocaleString()} bytes
+                      </div>
+                    </div>
+                    <button
+                      className="text-sm underline"
+                      onClick={async () => {
+                        const url = await getSignedUrl(d.path);
+                        if (url) window.open(url, '_blank');
+                      }}
+                    >
+                      Download
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {err && <div className="text-destructive">{err}</div>}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Recent Requests</CardTitle></CardHeader>
