@@ -6,13 +6,19 @@ import { Button } from '@/components/ui/button';
 
 type Profile = { role: 'borrower_admin'|'borrower_user'|'lender_admin'|'lender_analyst'; customer_id: string | null };
 type Customer = { id: string; legal_name: string };
-type Facility = { id: string; type: 'revolving' | 'single_loan'; credit_limit: number; apr: number };
+type Facility = { id: string; type: 'revolving' | 'single_loan'; credit_limit: number; apr: number; min_advance: number };
 type Tx = {
   id: string;
   type: 'advance' | 'payment' | 'interest' | 'fee' | 'letter_of_credit' | 'dof' | 'adjustment';
   amount: number;
   effective_at: string; // ISO
   memo: string | null;
+};
+type Draw = {
+  id: string;
+  amount: number;
+  status: 'submitted' | 'under_review' | 'approved' | 'rejected';
+  created_at: string;
 };
 
 export default function BorrowerPage() {
@@ -25,6 +31,18 @@ export default function BorrowerPage() {
   const [principal, setPrincipal] = useState<number | null>(null);
   const [available, setAvailable] = useState<number | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
+  
+  // Draw request state
+  const [drawAmount, setDrawAmount] = useState<string>('50000');
+  const [drawMemo, setDrawMemo] = useState<string>('Working capital');
+  const [postingDraw, setPostingDraw] = useState(false);
+  const [draws, setDraws] = useState<Draw[]>([]);
+
+  // Validation helpers
+  const reqAmt = Number(drawAmount || '0');
+  const tooSmall = facility ? reqAmt > 0 && reqAmt < (facility.min_advance ?? 0) : false;
+  const tooLarge = available != null ? reqAmt > available : false;
+  const invalidAmt = Number.isNaN(reqAmt) || reqAmt <= 0 || tooSmall || tooLarge;
 
   useEffect(() => {
     (async () => {
@@ -65,7 +83,7 @@ export default function BorrowerPage() {
         // 1) Load the first facility for this customer (you can later support multiple)
         const { data: fac, error: fErr } = await supabase
           .from('facilities')
-          .select('id, type, credit_limit, apr')
+          .select('id, type, credit_limit, apr, min_advance')
           .eq('customer_id', p.customer_id!)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -106,6 +124,15 @@ export default function BorrowerPage() {
             .rpc('facility_available_to_draw', { p_facility: fac.id });
 
           if (!aErr) setAvailable(Number(avail ?? 0));
+
+          // 5) Load draw requests for this facility
+          const { data: drs, error: drErr } = await supabase
+            .from('draw_requests')
+            .select('id, amount, status, created_at')
+            .eq('facility_id', fac.id)
+            .order('created_at', { ascending: false });
+
+          if (!drErr) setDraws(drs || []);
         } else {
           setPrincipal(0);
         }
@@ -118,6 +145,44 @@ export default function BorrowerPage() {
   async function logout() {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
+  }
+
+  async function submitDraw(e: React.FormEvent) {
+    e.preventDefault();
+    if (!facility?.id) { setErr('No facility found'); return; }
+
+    const amt = Number(drawAmount);
+    if (Number.isNaN(amt) || amt <= 0) { setErr('Enter a valid amount > 0'); return; }
+    if (facility?.min_advance != null && amt < facility.min_advance) {
+      setErr(`Amount is below the minimum advance of ${facility.min_advance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`); 
+      return;
+    }
+    if (available != null && amt > available) {
+      setErr(`Requested amount exceeds available to draw (${available.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}).`);
+      return;
+    }
+
+    setPostingDraw(true);
+    const { error } = await supabase.from('draw_requests').insert({
+      facility_id: facility.id,
+      amount: amt,
+      decision_notes: drawMemo || null
+    });
+    setPostingDraw(false);
+
+    if (error) { setErr(error.message); return; }
+
+    // refresh list
+    const { data: drs } = await supabase
+      .from('draw_requests')
+      .select('id, amount, status, created_at')
+      .eq('facility_id', facility.id)
+      .order('created_at', { ascending: false });
+
+    setDraws(drs || []);
+    setErr(null);
+    setDrawAmount('50000');
+    setDrawMemo('Working capital');
   }
 
   if (loading) return <div className="p-6">Loading borrower…</div>;
@@ -200,6 +265,83 @@ export default function BorrowerPage() {
                   </div>
                   <div className="font-medium">
                     {t.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {facility && (
+        <Card>
+          <CardHeader><CardTitle>Request Funds</CardTitle></CardHeader>
+          <CardContent>
+            <form onSubmit={submitDraw} className="grid gap-3">
+              <div className="grid gap-1">
+                <label className="text-sm">Amount (USD)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={drawAmount}
+                  onChange={(e) => setDrawAmount(e.target.value)}
+                  className="border rounded px-3 py-2"
+                />
+                {facility?.min_advance != null && reqAmt > 0 && reqAmt < facility.min_advance && (
+                  <div className="text-xs text-destructive">
+                    Below minimum advance of {facility.min_advance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </div>
+                )}
+                {available != null && reqAmt > available && (
+                  <div className="text-xs text-destructive">
+                    Exceeds available to draw ({available.toLocaleString('en-US', { style: 'currency', currency: 'USD' })})
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-1">
+                <label className="text-sm">Purpose (optional)</label>
+                <input
+                  type="text"
+                  value={drawMemo}
+                  onChange={(e) => setDrawMemo(e.target.value)}
+                  className="border rounded px-3 py-2"
+                  placeholder="Working capital, equipment purchase, etc."
+                />
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={postingDraw || !facility?.id || invalidAmt}
+                  className="px-4 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50"
+                >
+                  {postingDraw ? 'Submitting…' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle>Recent Requests</CardTitle></CardHeader>
+        <CardContent>
+          {(!draws || draws.length === 0) ? (
+            <div className="text-muted-foreground">No draw requests yet.</div>
+          ) : (
+            <div className="grid gap-3">
+              {draws.map(d => (
+                <div key={d.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
+                  <div className="space-y-0.5">
+                    <div className="font-medium">
+                      {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(d.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="text-xs uppercase tracking-wide font-medium">
+                    {d.status}
                   </div>
                 </div>
               ))}
