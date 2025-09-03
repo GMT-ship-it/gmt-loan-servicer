@@ -38,6 +38,7 @@ export default function BorrowerPage() {
   const [facility, setFacility] = useState<Facility | null>(null);
   const [principal, setPrincipal] = useState<number | null>(null);
   const [available, setAvailable] = useState<number | null>(null);
+  const [accrued, setAccrued] = useState<number | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
   
   // Draw request state
@@ -138,6 +139,11 @@ export default function BorrowerPage() {
             .rpc('facility_available_to_draw', { p_facility: fac.id });
 
           if (!aErr) setAvailable(Number(avail ?? 0));
+
+          // 5) Accrued Interest (unposted)
+          const { data: accr, error: accErr } = await supabase
+            .rpc('facility_accrued_interest', { p_facility: fac.id });
+          if (!accErr) setAccrued(Number(accr ?? 0));
 
           // 5) Load draw requests for this facility
           const { data: drs, error: drErr } = await supabase
@@ -339,6 +345,12 @@ export default function BorrowerPage() {
                 <span>Available to Draw</span>
                 <span className="font-medium">
                   {(available ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Accrued Interest (unposted)</span>
+                <span className="font-medium">
+                  {(accrued ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </span>
               </div>
             </>
