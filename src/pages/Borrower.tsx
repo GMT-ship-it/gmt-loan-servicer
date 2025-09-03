@@ -23,6 +23,7 @@ export default function BorrowerPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [facility, setFacility] = useState<Facility | null>(null);
   const [principal, setPrincipal] = useState<number | null>(null);
+  const [available, setAvailable] = useState<number | null>(null);
   const [txs, setTxs] = useState<Tx[]>([]);
 
   useEffect(() => {
@@ -99,6 +100,12 @@ export default function BorrowerPage() {
           } else {
             setTxs(txRows || []);
           }
+
+          // 4) Available to Draw (server-computed, RLS applies via underlying tables)
+          const { data: avail, error: aErr } = await supabase
+            .rpc('facility_available_to_draw', { p_facility: fac.id });
+
+          if (!aErr) setAvailable(Number(avail ?? 0));
         } else {
           setPrincipal(0);
         }
@@ -162,6 +169,12 @@ export default function BorrowerPage() {
                 <span>Outstanding Principal</span>
                 <span className="font-medium">
                   {(principal ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Available to Draw</span>
+                <span className="font-medium">
+                  {(available ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </span>
               </div>
             </>
