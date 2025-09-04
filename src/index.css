@@ -133,6 +133,13 @@ body {
   background-color: transparent;
 }
 
+/* Compact density adjustments */
+:root.compact .card-surface { border-radius: 0.75rem; }
+:root.compact .compact-p { padding: 0.5rem !important; }
+:root.compact .compact-py { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+:root.compact .compact-gap { gap: 0.5rem !important; }
+:root.compact .text-sm-compact { font-size: 0.9rem !important; }
+
 /* Reduced motion accessibility */
 @media (prefers-reduced-motion: reduce) {
   * {

@@ -603,14 +603,14 @@ export default function BorrowerPage() {
           <div className="p-6 md:p-10">
             <h1 className="text-2xl md:text-3xl font-extrabold">Welcome back</h1>
             <p className="text-neutral-300 mt-2">Your credit line at a glance</p>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 flex gap-3 flex-wrap">
               <Button
                 onClick={() => {
                   // Scroll to draw request section
                   const drawSection = document.querySelector('[data-section="draw-request"]');
                   drawSection?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="bg-white text-black hover:bg-white/90"
+                className="bg-white text-black hover:bg-white/90 w-full sm:w-auto"
               >
                 Request Funds
               </Button>
@@ -618,7 +618,7 @@ export default function BorrowerPage() {
                 variant="outline"
                 onClick={downloadStatementPdf}
                 disabled={stmtLoading}
-                className="border-white/20 hover:bg-white/5 text-white"
+                className="border-white/20 hover:bg-white/5 text-white w-full sm:w-auto"
               >
                 {stmtLoading ? 'Generating…' : 'Download Statement'}
               </Button>

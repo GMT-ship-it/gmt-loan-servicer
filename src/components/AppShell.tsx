@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import CompactToggle from '@/components/CompactToggle';
 
 export default function AppShell() {
   const { pathname } = useLocation();
@@ -24,7 +25,8 @@ export default function AppShell() {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <CompactToggle />
             <Button variant="ghost" className="text-neutral-300 hover:text-white" title="Notifications">
               <Bell className="h-5 w-5" />
             </Button>

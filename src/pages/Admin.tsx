@@ -516,8 +516,8 @@ export default function AdminPage() {
             <h1 className="text-2xl md:text-3xl font-extrabold">Lender Console</h1>
             <p className="text-neutral-300 mt-2">Approvals, exposure & compliance at a glance</p>
             <div className="mt-4 flex gap-3 flex-wrap">
-              <Button onClick={loadExposure} className="bg-white text-black hover:bg-white/90">Refresh Exposure</Button>
-              <Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Load Audit</Button>
+              <Button onClick={loadExposure} className="bg-white text-black hover:bg-white/90 w-full sm:w-auto">Refresh Exposure</Button>
+              <Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white w-full sm:w-auto">Load Audit</Button>
             </div>
           </div>
         </div>

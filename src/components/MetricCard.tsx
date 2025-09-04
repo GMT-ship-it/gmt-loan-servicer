@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 export function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <motion.div
-      className="min-w-[220px] snap-start card-surface p-4"
+      className="min-w-[200px] sm:min-w-[220px] snap-start card-surface p-3 sm:p-4 compact-p"
       variants={{
         hidden: { opacity: 0, y: 6 },
         show: { opacity: 1, y: 0, transition: { duration: 0.25 } },
