@@ -12,6 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 import { ExternalLink, TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { NotificationBell } from '@/components/NotificationBell';
+import { Row } from '@/components/Row';
+import { MetricCard } from '@/components/MetricCard';
+import { ListCard } from '@/components/ListCard';
+import { Chip } from '@/components/Chip';
 import type { Facility } from '@/types/facility';
 
 type Customer = { id: string; legal_name: string; };
@@ -49,6 +53,36 @@ type ExposureRow = {
 };
 
 type Compliance = { docsOk: boolean; bbcOk: boolean; limitOk: boolean; available: number };
+
+type BBCReview = {
+  id: string;
+  facility_id: string;
+  customer_name?: string;
+  period_end: string;
+  status: 'submitted' | 'under_review' | 'approved' | 'rejected' | 'draft';
+  borrowing_base: number;
+  availability: number;
+  gross_collateral: number;
+};
+
+type AuditEntry = {
+  id: string;
+  action: string;
+  table_name: string;
+  record_id: string;
+  created_at: string;
+};
+
+// Helper functions
+const money = (n: number | null | undefined) =>
+  Number(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+const fmtPct = (x: number | null | undefined) =>
+  `${(Number(x || 0)).toFixed(2)}%`;
+
+// Optional: tone by utilization
+const utilTone = (pct: number) =>
+  pct >= 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok';
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -90,6 +124,10 @@ export default function AdminPage() {
   const [timeSeries, setTimeSeries] = useState<any[]>([]);
   const [timeSeriesFacility, setTimeSeriesFacility] = useState('');
   const [breachesLoading, setBreachesLoading] = useState(false);
+
+  // BBC Review and Audit state
+  const [bbcReviews, setBbcReviews] = useState<BBCReview[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
 
   // Load functions
   const loadBreaches = async () => {
@@ -150,6 +188,111 @@ export default function AdminPage() {
     const { data, error } = await supabase.rpc('lender_exposure_snapshot');
     setLoadingExposure(false);
     if (!error) setExposure(data || []);
+  };
+
+  const loadBBCReviews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('borrowing_base_reports')
+        .select(`
+          id, facility_id, period_end, status, borrowing_base, availability, gross_collateral,
+          facilities!inner(customer_id, customers!inner(legal_name))
+        `)
+        .eq('status', 'submitted')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const reviews = (data || []).map(r => ({
+        id: r.id,
+        facility_id: r.facility_id,
+        period_end: r.period_end,
+        status: r.status,
+        borrowing_base: r.borrowing_base,
+        availability: r.availability,
+        gross_collateral: r.gross_collateral,
+        customer_name: (r.facilities as any)?.customers?.legal_name || 'Unknown'
+      }));
+      
+      setBbcReviews(reviews);
+    } catch (error) {
+      console.error('Error loading BBC reviews:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load BBC reviews",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadAudit = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('audit_log')
+        .select('id, action, table_name, record_id, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      setAudit(data || []);
+    } catch (error) {
+      console.error('Error loading audit:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load audit logs",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const approveBBC = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('borrowing_base_reports')
+        .update({ status: 'approved' })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "BBC report approved",
+      });
+      
+      await loadBBCReviews();
+    } catch (error) {
+      console.error('Error approving BBC:', error);
+      toast({
+        title: "Error",
+        description: "Failed to approve BBC report",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const rejectBBC = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('borrowing_base_reports')
+        .update({ status: 'rejected' })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "BBC report rejected",
+      });
+      
+      await loadBBCReviews();
+    } catch (error) {
+      console.error('Error rejecting BBC:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reject BBC report",
+        variant: "destructive",
+      });
+    }
   };
 
   const loadDrawRequests = async () => {
@@ -357,6 +500,8 @@ export default function AdminPage() {
       await loadExposure();
       await loadBreaches();
       await loadPortfolioAgg();
+      await loadBBCReviews();
+      await loadAudit();
 
       setLoading(false);
     })();
@@ -365,507 +510,309 @@ export default function AdminPage() {
   if (loading) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Lender Portal</h1>
-        <div className="flex items-center gap-4">
-          <NotificationBell />
-          <Button variant="outline" onClick={() => {
-            loadExposure();
-            loadDrawRequests();
-            loadBreaches();
-            loadPortfolioAgg();
-          }}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh Data
-          </Button>
+    <>
+      {/* Hero header */}
+      <div className="mt-8">
+        <div
+          className="rounded-2xl overflow-hidden relative"
+          style={{
+            background:
+              'radial-gradient(120% 120% at 0% 0%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 40%, transparent 70%)',
+          }}
+        >
+          <div className="p-6 md:p-10">
+            <h1 className="text-2xl md:text-3xl font-extrabold">Lender Console</h1>
+            <p className="text-neutral-300 mt-2">Approvals, exposure & compliance at a glance</p>
+            <div className="mt-4 flex gap-3 flex-wrap">
+              <Button onClick={loadExposure} className="bg-white text-black hover:bg-white/90">Refresh Exposure</Button>
+              <Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Load Audit</Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="draws">Draw Requests</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="facilities">Facilities</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
+      {/* KPIs */}
+      <Row title="Portfolio KPIs">
+        <MetricCard
+          label="Active Facilities"
+          value={String(exposure?.length || 0)}
+          sub="with current utilization"
+        />
+        <MetricCard
+          label="Total Exposure"
+          value={money(exposure?.reduce((a: number, r: any) => a + Number(r.principal_outstanding || 0), 0))}
+          sub="Outstanding principal"
+        />
+        <MetricCard
+          label="Total Availability"
+          value={money(exposure?.reduce((a: number, r: any) => a + Number(r.available_to_draw || 0), 0))}
+          sub="Across facilities"
+        />
+        <MetricCard
+          label="BBC Status"
+          value={`${exposure?.filter((r: any) => r.bbc_approved_within_45d).length || 0} fresh`}
+          sub={`${exposure?.filter((r: any) => !r.bbc_approved_within_45d).length || 0} stale`}
+        />
+      </Row>
 
-        <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Facilities</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{exposure.length}</div>
-                <p className="text-xs text-muted-foreground">Total facilities</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Exposure</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ${exposure.reduce((sum, exp) => sum + exp.principal_outstanding, 0).toLocaleString()}
+      {/* Approvals (Draw Requests) */}
+      {!!draws?.length && (
+        <Row title="Approvals (Draw Requests)">
+          {draws.map((d: any) => (
+            <div key={d.id} className="min-w-[360px] snap-start card-surface p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-base font-semibold">
+                  {d.customer_name || d.facility_id?.slice(0,8)} • {money(d.amount)}
                 </div>
-                <p className="text-xs text-muted-foreground">Outstanding principal</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Available Credit</CardTitle>
-                <TrendingDown className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  ${exposure.reduce((sum, exp) => sum + exp.available_to_draw, 0).toLocaleString()}
-                </div>
-                <p className="text-xs text-muted-foreground">Available to draw</p>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Compliance Breaches</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{breaches.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {breaches.length === 0 ? 'All compliant' : 'Need attention'}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Exposure Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Portfolio Exposure</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {exposure.length === 0 ? (
-                <div className="text-muted-foreground">No active facilities found.</div>
-              ) : (
-                <div className="space-y-3">
-                  {exposure.slice(0, 10).map((exp, i) => (
-                    <div key={i} className="flex items-center justify-between border-b pb-2">
-                      <div>
-                        <div className="font-medium">{exp.customer_name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {exp.facility_id.slice(0, 8)}... • Util: {exp.utilization_pct.toFixed(1)}%
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-medium">
-                          ${exp.principal_outstanding.toLocaleString()}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Avail: ${exp.available_to_draw.toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="draws" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Draw Requests</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {draws.length === 0 ? (
-                <div className="text-muted-foreground">No draw requests yet.</div>
-              ) : (
-                <div className="grid gap-4">
-                  {draws.map(d => (
-                    <div key={d.id} className="border rounded p-3 space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm">
-                          <div className="font-medium">
-                            {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            Facility: <span className="font-mono">{d.facility_id}</span> • {new Date(d.created_at).toLocaleString()}
-                          </div>
-                        </div>
-                        <div className="text-xs uppercase tracking-wide">{d.status}</div>
-                      </div>
-
-                      {/* Compliance badges */}
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        {(() => {
-                          const c = complianceByDraw[d.id];
-                          if (!c) return null;
-                          return (
-                            <>
-                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.docsOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
-                                 Docs {c.docsOk ? 'OK' : 'Missing'}
-                               </span>
-                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.bbcOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
-                                 BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
-                               </span>
-                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.limitOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
-                                 Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
-                               </span>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      <div className="grid gap-1">
-                        <label className="text-sm">Decision notes (optional)</label>
-                        <Input
-                          value={decisionNotes[d.id] ?? d.decision_notes ?? ''}
-                          onChange={(e)=>setNotes(d.id, e.target.value)}
-                          placeholder="Reason or internal notes"
-                          className="text-sm"
-                        />
-                      </div>
-
-                      {/* Documents section */}
-                      <div className="grid gap-1">
-                        <div className="font-medium text-sm">Documents</div>
-                        {Array.isArray(docsByDraw[d.id]) && docsByDraw[d.id].length > 0 ? (
-                          <div className="grid gap-1">
-                            {docsByDraw[d.id].map(doc => (
-                              <div key={doc.id} className="flex items-center justify-between text-sm">
-                                <div className="truncate">
-                                  {(doc.original_name || doc.path.split('/').pop())}
-                                  <span className="text-xs text-muted-foreground">
-                                    {' '}• {doc.mime_type || 'file'} • {(doc.size_bytes ?? 0).toLocaleString()} bytes
-                                  </span>
-                                </div>
-                                 <button
-                                   className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 hover:no-underline transition-colors"
-                                   onClick={async () => {
-                                     const url = await getSignedUrl(doc.path);
-                                     if (url) window.open(url, '_blank');
-                                   }}
-                                 >
-                                   Download
-                                 </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">No documents uploaded.</div>
-                        )}
-                      </div>
-
-                      {/* Docs OK toggle */}
-                      <div className="flex items-center gap-2 pt-2">
-                        <label className="text-sm flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={!!d.required_docs_ok}
-                            onChange={(e)=>toggleDocsOk(d.id, e.target.checked)}
-                            disabled={togglingDocsOk === d.id}
-                          />
-                          Required docs OK
-                        </label>
-                        {togglingDocsOk === d.id && <span className="text-xs">Saving…</span>}
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {(() => {
-                          const c = complianceByDraw[d.id];
-                          return (
-                            <Button
-                              variant="outline"
-                              disabled={
-                                decidingId === d.id ||
-                                d.status === 'approved' ||
-                                !c || !c.docsOk || !c.bbcOk || !c.limitOk
-                              }
-                              title={
-                                !c ? 'Checking compliance…'
-                                  : !c.docsOk ? 'Docs not marked OK'
-                                  : !c.bbcOk ? 'No approved BBC within 45 days'
-                                  : !c.limitOk ? `Amount exceeds availability (${(c.available||0).toLocaleString('en-US',{style:'currency',currency:'USD'})})`
-                                  : undefined
-                              }
-                              onClick={()=>decideDraw(d.id, 'approved')}
-                            >
-                              {decidingId === d.id ? 'Saving…' : 'Approve'}
-                            </Button>
-                          );
-                        })()}
-                        <Button
-                          variant="destructive"
-                          disabled={decidingId === d.id || d.status === 'rejected'}
-                          onClick={()=>decideDraw(d.id, 'rejected')}
-                        >
-                          {decidingId === d.id ? 'Saving…' : 'Reject'}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="compliance" className="space-y-6">
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  Compliance Breaches
-                </CardTitle>
-                <CardDescription>
-                  Monitor facility covenant violations and policy breaches
-                </CardDescription>
+                <Chip
+                  text={d.status.replace('_',' ')}
+                  tone={d.status === 'approved' ? 'ok' : d.status === 'rejected' ? 'bad' : 'warn'}
+                />
               </div>
-              <Button 
-                variant="outline" 
-                onClick={loadBreaches}
-                disabled={breachesLoading}
-              >
-                <RefreshCw className={`mr-2 h-4 w-4 ${breachesLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {breaches.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {breachesLoading ? 'Loading breaches...' : 'No compliance breaches found. ✅'}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {breaches.map((breach, i) => (
-                    <div key={i} className="border rounded-lg p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium">
-                          {breach.customer_name} • 
-                          <span className="font-mono text-sm ml-2">
-                            {breach.facility_id.slice(0, 8)}...
-                          </span>
-                        </div>
-                        <Badge 
-                          variant={breach.severity === 'warning' ? 'destructive' : 'secondary'}
-                        >
-                          {breach.code}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {breach.message}
-                      </div>
-                    </div>
-                  ))}
+              <div className="text-sm text-neutral-400 mt-1">
+                Submitted {new Date(d.created_at).toLocaleString()}
+                {d.required_docs_ok ? ' • Docs OK' : ' • Docs missing'}
+              </div>
+
+              {/* Compliance badge row if you computed it */}
+              {complianceByDraw?.[d.id] && (
+                <div className="flex flex-wrap gap-2 mt-3 text-xs">
+                  {(() => {
+                    const c = complianceByDraw[d.id];
+                    return (
+                      <>
+                        <Chip text={`Docs ${c.docsOk ? 'OK' : 'Missing'}`} tone={c.docsOk ? 'ok' : 'bad'} />
+                        <Chip text={`BBC ≤45d ${c.bbcOk ? 'OK' : 'Required'}`} tone={c.bbcOk ? 'ok' : 'warn'} />
+                        <Chip
+                          text={c.limitOk ? 'Within Limit' : `Exceeds • Avail ${money(c.available)}`}
+                          tone={c.limitOk ? 'ok' : 'bad'}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Portfolio by Sector/Region</CardTitle>
-                <CardDescription>Outstanding balances and credit limits by industry sector</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={portfolioAgg}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="sector" />
-                      <YAxis />
-                      <Tooltip 
-                        formatter={(value: any, name: string) => [
-                          `$${Number(value).toLocaleString()}`, 
-                          name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
-                        ]}
-                      />
-                      <Bar dataKey="principal_outstanding" name="Outstanding" fill="hsl(var(--primary))" />
-                      <Bar dataKey="credit_limit" name="Credit Limit" fill="hsl(var(--muted))" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Utilization Trend (90 days)</CardTitle>
-                  <CardDescription>Track facility utilization over time</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Enter Facility ID"
-                    value={timeSeriesFacility}
-                    onChange={(e) => setTimeSeriesFacility(e.target.value)}
-                    className="w-72 font-mono text-sm"
-                  />
-                  <Button 
-                    variant="outline" 
-                    onClick={() => loadTimeSeries(timeSeriesFacility)}
-                    disabled={!timeSeriesFacility.trim()}
-                  >
-                    Load
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={timeSeries}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="d" />
-                      <YAxis />
-                      <Tooltip 
-                        formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
-                        labelFormatter={(label) => `Date: ${label}`}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="utilization_pct" 
-                        name="Utilization %" 
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={2}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="facilities" className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle>Create Facility</CardTitle></CardHeader>
-            <CardContent>
-              <form onSubmit={createFacility} className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label>Customer</Label>
-                  <Select
-                    value={facilityForm.customer_id}
-                    onValueChange={(v) => setFacilityForm(f => ({ ...f, customer_id: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.legal_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Facility Type</Label>
-                  <Select
-                    value={facilityForm.type}
-                    onValueChange={(v: 'revolving' | 'single_loan') =>
-                      setFacilityForm(f => ({ ...f, type: v }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="revolving">Revolving</SelectItem>
-                      <SelectItem value="single_loan">Single Loan</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Credit Limit (USD)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={facilityForm.credit_limit}
-                    onChange={(e) => setFacilityForm(f => ({ ...f, credit_limit: e.target.value }))}
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>APR (decimal, e.g., 0.145 = 14.5%)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={facilityForm.apr}
-                    onChange={(e) => setFacilityForm(f => ({ ...f, apr: e.target.value }))}
-                  />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label>Minimum Advance (USD)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={facilityForm.min_advance}
-                    onChange={(e) => setFacilityForm(f => ({ ...f, min_advance: e.target.value }))}
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Button type="submit" disabled={!canSubmit || creating}>
-                    {creating ? 'Creating…' : 'Create Facility'}
-                  </Button>
-                  {err && <span className="text-destructive">{err}</span>}
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="reports" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Weekly Reports</CardTitle>
-              <CardDescription>Generate automated compliance and audit reports</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+              {/* Actions */}
+              <div className="mt-4 flex gap-2">
                 <Button
-                  onClick={async () => {
-                    toast({
-                      title: "Report Generated",
-                      description: "Weekly breach digest has been triggered",
-                    });
-                  }}
+                  variant="outline"
+                  disabled={
+                    d.status === 'approved' ||
+                    !complianceByDraw?.[d.id]?.docsOk ||
+                    !complianceByDraw?.[d.id]?.bbcOk ||
+                    !complianceByDraw?.[d.id]?.limitOk ||
+                    decidingId === d.id
+                  }
+                  onClick={() => decideDraw(d.id, 'approved')}
+                  className="border-white/20 hover:bg-white/5 text-white"
+                  title={
+                    !complianceByDraw?.[d.id]
+                      ? 'Checking…'
+                      : !complianceByDraw[d.id].docsOk
+                      ? 'Docs not OK'
+                      : !complianceByDraw[d.id].bbcOk
+                      ? 'BBC not fresh'
+                      : !complianceByDraw[d.id].limitOk
+                      ? 'Exceeds availability'
+                      : undefined
+                  }
                 >
-                  Generate Weekly Breach Report
+                  {decidingId === d.id ? 'Saving…' : 'Approve'}
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={async () => {
-                    toast({
-                      title: "Export Started",
-                      description: "Audit log export to S3 has been initiated",
-                    });
-                  }}
+                  disabled={d.status === 'rejected' || decidingId === d.id}
+                  onClick={() => decideDraw(d.id, 'rejected')}
+                  className="border-white/20 hover:bg-white/5 text-white"
                 >
-                  Export Audit Logs to S3
+                  Reject
                 </Button>
+              </div>
+            </div>
+          ))}
+        </Row>
+      )}
+
+      {/* BBC Review */}
+      {!!bbcReviews?.length && (
+        <Row title="Borrowing Base Review">
+          {bbcReviews.map((r: any) => (
+            <div key={r.id} className="min-w-[360px] snap-start card-surface p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-base font-semibold">
+                  {r.customer_name || r.facility_id?.slice(0,8)} • Period {r.period_end}
+                </div>
+                <Chip text={r.status} tone={r.status==='approved'?'ok':r.status==='rejected'?'bad':'warn'} />
+              </div>
+              <div className="text-sm text-neutral-400 mt-1">
+                BB {money(r.borrowing_base)} • Availability {money(r.availability)} • AR {money(r.gross_collateral)}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => approveBBC(r.id)}
+                  className="border-white/20 hover:bg-white/5 text-white"
+                  disabled={r.status === 'approved'}
+                >
+                  Approve
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => rejectBBC(r.id)}
+                  className="border-white/20 hover:bg-white/5 text-white"
+                  disabled={r.status === 'rejected'}
+                >
+                  Reject
+                </Button>
+              </div>
+            </div>
+          ))}
+        </Row>
+      )}
+
+      {/* Exposure */}
+      {!!exposure?.length && (
+        <Row
+          title="Exposure (Top Utilization)"
+          action={<Button variant="outline" onClick={loadExposure} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+        >
+          {exposure
+            .slice() // copy
+            .sort((a: any, b: any) => Number(b.utilization_pct) - Number(a.utilization_pct))
+            .map((r: any) => (
+              <div key={r.facility_id} className="min-w-[360px] snap-start card-surface p-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-base font-semibold">{r.customer_name}</div>
+                  <Chip text={fmtPct(r.utilization_pct)} tone={utilTone(Number(r.utilization_pct || 0))} />
+                </div>
+                <div className="text-sm text-neutral-400 mt-1">
+                  Limit {money(r.credit_limit)} • Outst {money(r.principal_outstanding)} • Avail {money(r.available_to_draw)}
+                </div>
+                <div className="text-xs text-neutral-500 mt-2">
+                  BBC {r.bbc_approved_within_45d ? 'fresh' : 'stale'}
+                  {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
+                </div>
+              </div>
+            ))}
+        </Row>
+      )}
+
+      {/* Audit (last actions) */}
+      {!!audit?.length && (
+        <Row
+          title="Recent Audit"
+          action={<Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+        >
+          {audit.slice(0,12).map((a: any) => (
+            <ListCard
+              key={a.id}
+              title={a.action}
+              meta={a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+              right={<span className="text-xs text-neutral-400">{a.table_name}</span>}
+              muted={a.record_id ? `Record ${a.record_id}` : ''}
+            />
+          ))}
+        </Row>
+      )}
+
+      {/* Analytics (optional charts already in your file) — wrap them in card-surface or reuse rows */}
+      <section className="mt-8">
+        <Row title="Analytics">
+          <Card className="min-w-[500px] card-surface">
+            <CardHeader>
+              <CardTitle>Portfolio by Sector/Region</CardTitle>
+              <CardDescription>Outstanding balances and credit limits by industry sector</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={portfolioAgg}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="sector" />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value: any, name: string) => [
+                        `$${Number(value).toLocaleString()}`, 
+                        name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
+                      ]}
+                    />
+                    <Bar dataKey="principal_outstanding" name="Outstanding" fill="hsl(var(--primary))" />
+                    <Bar dataKey="credit_limit" name="Credit Limit" fill="hsl(var(--muted))" />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+
+          <Card className="min-w-[500px] card-surface">
+            <CardHeader className="flex items-center justify-between">
+              <div>
+                <CardTitle>Utilization Trend (90 days)</CardTitle>
+                <CardDescription>Track facility utilization over time</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Enter Facility ID"
+                  value={timeSeriesFacility}
+                  onChange={(e) => setTimeSeriesFacility(e.target.value)}
+                  className="w-72 font-mono text-sm"
+                />
+                <Button 
+                  variant="outline" 
+                  onClick={() => loadTimeSeries(timeSeriesFacility)}
+                  disabled={!timeSeriesFacility.trim()}
+                  className="border-white/20 hover:bg-white/5 text-white"
+                >
+                  Load
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={timeSeries}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="d" />
+                    <YAxis />
+                    <Tooltip 
+                      formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="utilization_pct" 
+                      name="Utilization %" 
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </Row>
+
+        {/* Compliance Breaches */}
+        <Row title="Compliance Breaches" action={<Button variant="outline" onClick={loadBreaches} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}>
+          {breaches.length === 0 ? (
+            <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+              No compliance breaches found ✅
+            </div>
+          ) : (
+            breaches.map((breach, i) => (
+              <ListCard
+                key={i}
+                title={`${breach.customer_name} • ${breach.code}`}
+                meta={breach.message}
+                right={<Chip text={breach.severity} tone={breach.severity === 'warning' ? 'warn' : 'bad'} />}
+                muted={`Facility ${breach.facility_id.slice(0, 8)}...`}
+              />
+            ))
+          )}
+        </Row>
+      </section>
+    </>
   );
 }
