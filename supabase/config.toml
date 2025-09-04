@@ -3,6 +3,12 @@ project_id = "ogmrcygjqqugcwzaioxc"
 [functions.post-interest-eod]
 verify_jwt = false
 
+[functions.weekly-breach-digest]
+verify_jwt = false
+
+[functions.export-audit-to-s3]
+verify_jwt = false
+
 [functions.close-stale-draws]
 verify_jwt = false
 
