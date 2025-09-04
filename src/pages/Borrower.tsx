@@ -9,6 +9,7 @@ import { Row } from '@/components/Row';
 import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
+import { useNotify } from '@/lib/notify';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 // @ts-ignore
 import jsPDF from 'jspdf';
@@ -55,6 +56,7 @@ type BbcItem = {
 
 export default function BorrowerPage() {
   const navigate = useNavigate();
+  const notify = useNotify();
   const [loading, setLoading] = useState(true);
   const [loadingFacility, setLoadingFacility] = useState(true);
   const [loadingTx, setLoadingTx] = useState(true);
@@ -96,11 +98,18 @@ export default function BorrowerPage() {
     ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000'
   });
 
-  // Validation helpers
+  // Validation helpers - enhanced with error messages
   const reqAmt = Number(drawAmount || '0');
   const tooSmall = facility ? reqAmt > 0 && reqAmt < (facility.min_advance ?? 0) : false;
   const tooLarge = available != null ? reqAmt > available : false;
   const invalidAmt = Number.isNaN(reqAmt) || reqAmt <= 0 || tooSmall || tooLarge;
+  
+  const getAmountError = () => {
+    if (!drawAmount || reqAmt <= 0) return "Amount must be greater than 0";
+    if (tooSmall) return `Below minimum advance of ${money(facility?.min_advance || 0)}`;
+    if (tooLarge) return `Exceeds available to draw (${money(available || 0)})`;
+    return null;
+  };
 
   // Helper function for formatting currency
   const money = (n: number) => (Number(n || 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -353,109 +362,148 @@ export default function BorrowerPage() {
       return;
     }
 
-    setPostingDraw(true);
-    const { error } = await supabase.from('draw_requests').insert({
-      facility_id: facility.id,
-      amount: amt,
-      decision_notes: drawMemo || null
-    });
-    setPostingDraw(false);
+    try {
+      setPostingDraw(true);
+      const { error } = await supabase.from('draw_requests').insert({
+        facility_id: facility.id,
+        amount: amt,
+        decision_notes: drawMemo || null
+      });
 
-    if (error) { setErr(error.message); return; }
+      if (error) throw error;
 
-    // refresh list
-    const { data: drs } = await supabase
-      .from('draw_requests')
-      .select('id, amount, status, created_at')
-      .eq('facility_id', facility.id)
-      .order('created_at', { ascending: false });
+      notify.success("Draw request submitted", "Your request is now under review");
 
-    setDraws(drs || []);
-    
-    // Update active draw and docs after creating new draw
-    const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
-    setActiveDrawId(latestSubmitted?.id ?? null);
-    setDocs([]); // New draw has no docs yet
-    
-    setErr(null);
-    setDrawAmount('50000');
-    setDrawMemo('Working capital');
+      // refresh list
+      const { data: drs } = await supabase
+        .from('draw_requests')
+        .select('id, amount, status, created_at')
+        .eq('facility_id', facility.id)
+        .order('created_at', { ascending: false });
+
+      setDraws(drs || []);
+      
+      // Update active draw and docs after creating new draw
+      const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
+      setActiveDrawId(latestSubmitted?.id ?? null);
+      setDocs([]); // New draw has no docs yet
+      
+      setErr(null);
+      setDrawAmount('50000');
+      setDrawMemo('Working capital');
+    } catch (err: any) {
+      notify.error("Request failed", err.message || "Unknown error");
+      setErr(err.message);
+    } finally {
+      setPostingDraw(false);
+    }
   }
 
   async function createBbc(e: React.FormEvent) {
     e.preventDefault();
     if (!facility?.id) { setErr('No facility found'); return; }
-    setCreatingBbc(true); setErr(null);
+    
+    try {
+      setCreatingBbc(true); 
+      setErr(null);
 
-    const { data, error } = await supabase
-      .from('borrowing_base_reports')
-      .insert({
-        facility_id: facility.id,
-        period_end: bbcPeriodEnd,
-        status: 'draft',
-        advance_rate: 0.80
-      })
-      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
-      .single();
+      const { data, error } = await supabase
+        .from('borrowing_base_reports')
+        .insert({
+          facility_id: facility.id,
+          period_end: bbcPeriodEnd,
+          status: 'draft',
+          advance_rate: 0.80
+        })
+        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+        .single();
 
-    setCreatingBbc(false);
-    if (error) { setErr(error.message); return; }
-    setBbc(data);
-    setBbcItems([]);
+      if (error) throw error;
+
+      setBbc(data);
+      setBbcItems([]);
+      notify.success("BBC created", "You can now add collateral items");
+    } catch (err: any) {
+      notify.error("Creation failed", err.message || "Unknown error");
+      setErr(err.message);
+    } finally {
+      setCreatingBbc(false);
+    }
   }
 
   async function addBbcItem(e: React.FormEvent) {
     e.preventDefault();
     if (!bbc?.id) { setErr('Create a BBC first'); return; }
-    setErr(null);
-    const amt = Number(itemForm.amount);
-    const hr  = Number(itemForm.haircut_rate);
-    if (!(amt > 0)) { setErr('Enter amount > 0'); return; }
-    if (Number.isNaN(hr) || hr < 0 || hr > 1) { setErr('Haircut must be between 0 and 1'); return; }
+    
+    try {
+      setErr(null);
+      const amt = Number(itemForm.amount);
+      const hr  = Number(itemForm.haircut_rate);
+      if (!(amt > 0)) { setErr('Enter amount > 0'); return; }
+      if (Number.isNaN(hr) || hr < 0 || hr > 1) { setErr('Haircut must be between 0 and 1'); return; }
 
-    const { error } = await supabase.from('borrowing_base_items').insert({
-      report_id: bbc.id, item_type: itemForm.item_type as BbcItemType,
-      ref: itemForm.ref || null, note: itemForm.note || null,
-      amount: amt, ineligible: itemForm.ineligible, haircut_rate: hr
-    });
-    if (error) { setErr(error.message); return; }
+      const { error } = await supabase.from('borrowing_base_items').insert({
+        report_id: bbc.id, item_type: itemForm.item_type as BbcItemType,
+        ref: itemForm.ref || null, note: itemForm.note || null,
+        amount: amt, ineligible: itemForm.ineligible, haircut_rate: hr
+      });
+      
+      if (error) throw error;
 
-    const [{ data: items }, { data: rep }] = await Promise.all([
-      supabase.from('borrowing_base_items')
-        .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
-        .eq('report_id', bbc.id).order('created_at', { ascending: false }),
-      supabase.from('borrowing_base_reports')
-        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
-        .eq('id', bbc.id).single()
-    ]);
-    setBbcItems(items || []);
-    if (rep) setBbc(rep);
+      const [{ data: items }, { data: rep }] = await Promise.all([
+        supabase.from('borrowing_base_items')
+          .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+          .eq('report_id', bbc.id).order('created_at', { ascending: false }),
+        supabase.from('borrowing_base_reports')
+          .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+          .eq('id', bbc.id).single()
+      ]);
+      setBbcItems(items || []);
+      if (rep) setBbc(rep);
 
-    setItemForm(f => ({ ...f, ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000' }));
+      setItemForm(f => ({ ...f, ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000' }));
+      notify.success("Item added", "BBC totals have been updated");
+    } catch (err: any) {
+      notify.error("Add failed", err.message || "Unknown error");
+      setErr(err.message);
+    }
   }
 
   async function submitBbc() {
     if (!bbc?.id) return;
-    const { error } = await supabase
-      .from('borrowing_base_reports')
-      .update({ status: 'submitted', submitted_at: new Date().toISOString() })
-      .eq('id', bbc.id);
-    if (error) { setErr(error.message); return; }
+    
+    try {
+      const { error } = await supabase
+        .from('borrowing_base_reports')
+        .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+        .eq('id', bbc.id);
+      
+      if (error) throw error;
 
-    const { data: rep } = await supabase
-      .from('borrowing_base_reports')
-      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
-      .eq('id', bbc.id).single();
-    if (rep) setBbc(rep);
+      const { data: rep } = await supabase
+        .from('borrowing_base_reports')
+        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+        .eq('id', bbc.id).single();
+      if (rep) setBbc(rep);
+
+      notify.success("BBC submitted", "Your report is now under review");
+    } catch (err: any) {
+      notify.error("Submit failed", err.message || "Unknown error");
+      setErr(err.message);
+    }
   }
 
   async function downloadStatementPdf() {
     if (!facility?.id) { setErr('No facility found'); return; }
-    setStmtLoading(true); setErr(null);
+    
     try {
+      setStmtLoading(true); 
+      setErr(null);
+      notify.info("Generating statement…");
+
       const { start, end } = monthBounds(stmtMonth);
 
-      // Fetch customer name and BBC compliance
+      // ... keep existing code (fetch data, create PDF, etc.)
       const [
         { data: header, error: hErr }, 
         { data: lines, error: lErr },
@@ -514,7 +562,9 @@ export default function BorrowerPage() {
       });
 
       doc.save(`statement_${stmtMonth}.pdf`);
+      notify.success("Statement ready", "Check your downloads.");
     } catch (e: any) {
+      notify.error("Statement failed", e.message || "Failed to generate statement");
       setErr(e.message || 'Failed to generate statement');
     } finally {
       setStmtLoading(false);
@@ -566,10 +616,11 @@ export default function BorrowerPage() {
               </Button>
               <Button
                 variant="outline"
-                onClick={() => downloadStatementPdf()}
+                onClick={downloadStatementPdf}
+                disabled={stmtLoading}
                 className="border-white/20 hover:bg-white/5 text-white"
               >
-                Download Statement
+                {stmtLoading ? 'Generating…' : 'Download Statement'}
               </Button>
             </div>
           </div>

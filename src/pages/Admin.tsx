@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
+import { useNotify } from '@/lib/notify';
 import { ExternalLink, TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -87,7 +87,7 @@ const utilTone = (pct: number) =>
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const notify = useNotify();
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [facilitiesList, setFacilitiesList] = useState<FacilityRow[]>([]);
@@ -142,11 +142,7 @@ export default function AdminPage() {
       setBreaches(data || []);
     } catch (error) {
       console.error('Error loading breaches:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load compliance breaches",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to load compliance breaches");
     } finally {
       setBreachesLoading(false);
     }
@@ -159,11 +155,7 @@ export default function AdminPage() {
       setPortfolioAgg(data || []);
     } catch (error) {
       console.error('Error loading portfolio aggregates:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load portfolio data",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to load portfolio data");
     }
   };
 
@@ -179,11 +171,7 @@ export default function AdminPage() {
       setTimeSeries(data || []);
     } catch (error) {
       console.error('Error loading time series:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load utilization trend",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to load utilization trend");
     }
   };
 
@@ -222,11 +210,7 @@ export default function AdminPage() {
       setBbcReviews(reviews);
     } catch (error) {
       console.error('Error loading BBC reviews:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load BBC reviews",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to load BBC reviews");
     } finally {
       setLoadingBBC(false);
     }
@@ -245,11 +229,7 @@ export default function AdminPage() {
       setAudit(data || []);
     } catch (error) {
       console.error('Error loading audit:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load audit logs",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to load audit logs");
     } finally {
       setLoadingAudit(false);
     }
@@ -264,19 +244,12 @@ export default function AdminPage() {
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "BBC report approved",
-      });
+      notify.success("Success", "BBC report approved");
       
       await loadBBCReviews();
     } catch (error) {
       console.error('Error approving BBC:', error);
-      toast({
-        title: "Error",
-        description: "Failed to approve BBC report",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to approve BBC report");
     }
   };
 
@@ -289,19 +262,12 @@ export default function AdminPage() {
       
       if (error) throw error;
       
-      toast({
-        title: "Success",
-        description: "BBC report rejected",
-      });
+      notify.success("Success", "BBC report rejected");
       
       await loadBBCReviews();
     } catch (error) {
       console.error('Error rejecting BBC:', error);
-      toast({
-        title: "Error",
-        description: "Failed to reject BBC report",
-        variant: "destructive",
-      });
+      notify.error("Error", "Failed to reject BBC report");
     }
   };
 
@@ -418,30 +384,41 @@ export default function AdminPage() {
   }
 
   async function decideDraw(id: string, newStatus: 'approved'|'rejected') {
-    setDecidingId(id);
-    setErr(null);
+    try {
+      setDecidingId(id);
+      setErr(null);
 
-    const notes = decisionNotes[id] ?? null;
+      const notes = decisionNotes[id] ?? null;
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setErr('Not authenticated'); setDecidingId(null); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
 
-    const { error } = await supabase
-      .from('draw_requests')
-      .update({
-        status: newStatus,
-        decision_notes: notes,
-        decided_by: session.user.id,
-        decided_at: new Date().toISOString()
-      })
-      .eq('id', id);
+      const { error } = await supabase
+        .from('draw_requests')
+        .update({
+          status: newStatus,
+          decision_notes: notes,
+          decided_by: session.user.id,
+          decided_at: new Date().toISOString()
+        })
+        .eq('id', id);
 
-    setDecidingId(null);
+      if (error) throw error;
 
-    if (error) { setErr(error.message); return; }
+      notify.success(
+        newStatus === 'approved' ? "Draw approved" : "Draw rejected",
+        newStatus === 'approved'
+          ? "Advance posted and borrower notified."
+          : "Borrower will see the decision immediately."
+      );
 
-    await loadDrawRequests();
-    await loadExposure();
+      await Promise.all([loadDrawRequests(), loadExposure()]);
+    } catch (err: any) {
+      notify.error("Decision failed", err.message || "Unknown error");
+      setErr(err.message);
+    } finally {
+      setDecidingId(null);
+    }
   }
 
   function setNotes(id: string, v: string) {
