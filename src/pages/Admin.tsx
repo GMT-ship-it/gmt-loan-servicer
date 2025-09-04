@@ -12,7 +12,7 @@ import { useNotify } from '@/lib/notify';
 import { ExternalLink, TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { NotificationBell } from '@/components/NotificationBell';
-import { Row } from '@/components/Row';
+import { MotionRow as Row } from '@/components/MotionRow';
 import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
