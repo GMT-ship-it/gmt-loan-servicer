@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CompactToggle from '@/components/CompactToggle';
 import { NotificationsProvider, useNotifications } from '@/contexts/NotificationsContext';
+import CommandPalette from '@/components/CommandPalette';
 
 function BellMenu() {
   const { items, unreadCount, loading, markAllRead, refresh } = useNotifications();
@@ -95,6 +96,7 @@ export default function AppShell() {
           <Outlet />
         </NotificationsProvider>
       </main>
+      <CommandPalette />
     </div>
   );
 }

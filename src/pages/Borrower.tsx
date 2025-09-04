@@ -281,6 +281,33 @@ export default function BorrowerPage() {
     })();
   }, [navigate]);
 
+  // Command palette event listeners
+  useEffect(() => {
+    const onOpenRequestFunds = () => {
+      const drawSection = document.querySelector('[data-section="draw-request"]');
+      drawSection?.scrollIntoView({ behavior: 'smooth' });
+    };
+    
+    const onDownloadStatement = () => {
+      downloadStatementPdf();
+    };
+    
+    const onOpenBbcUpload = () => {
+      const bbcSection = document.querySelector('[data-section="bbc"]');
+      bbcSection?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.addEventListener('open-request-funds', onOpenRequestFunds as EventListener);
+    window.addEventListener('download-latest-statement', onDownloadStatement as EventListener);
+    window.addEventListener('open-bbc-upload', onOpenBbcUpload as EventListener);
+
+    return () => {
+      window.removeEventListener('open-request-funds', onOpenRequestFunds as EventListener);
+      window.removeEventListener('download-latest-statement', onDownloadStatement as EventListener);
+      window.removeEventListener('open-bbc-upload', onOpenBbcUpload as EventListener);
+    };
+  }, []);
+
   async function logout() {
     await supabase.auth.signOut();
     navigate('/login', { replace: true });

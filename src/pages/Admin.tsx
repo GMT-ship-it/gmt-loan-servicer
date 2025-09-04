@@ -499,6 +499,19 @@ export default function AdminPage() {
     })();
   }, [navigate]);
 
+  // Command palette event listeners
+  useEffect(() => {
+    const onRefreshExposure = () => {
+      loadExposure();
+    };
+
+    window.addEventListener('refresh-exposure', onRefreshExposure as EventListener);
+
+    return () => {
+      window.removeEventListener('refresh-exposure', onRefreshExposure as EventListener);
+    };
+  }, []);
+
   if (loading) return <div className="p-6">Loading...</div>;
 
   return (
