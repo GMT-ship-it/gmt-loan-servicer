@@ -422,6 +422,17 @@ export type Database = {
         Args: { uid: string }
         Returns: boolean
       }
+      post_interest_all_active: {
+        Args: { p_as_of?: string }
+        Returns: {
+          facility_id: string
+          posted: number
+        }[]
+      }
+      post_interest_for_facility: {
+        Args: { p_as_of?: string; p_facility: string }
+        Returns: number
+      }
       recalc_bbc_header: {
         Args: { p_report: string }
         Returns: undefined
