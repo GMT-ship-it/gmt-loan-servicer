@@ -422,6 +422,20 @@ export type Database = {
         Args: { uid: string }
         Returns: boolean
       }
+      lender_exposure_snapshot: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          available_to_draw: number
+          bbc_approved_within_45d: boolean
+          credit_limit: number
+          customer_name: string
+          facility_id: string
+          last_bbc_date: string
+          last_draw_decided_at: string
+          principal_outstanding: number
+          utilization_pct: number
+        }[]
+      }
       post_interest_all_active: {
         Args: { p_as_of?: string }
         Returns: {
@@ -433,9 +447,32 @@ export type Database = {
         Args: { p_as_of?: string; p_facility: string }
         Returns: number
       }
+      principal_as_of: {
+        Args: { p_as_of: string; p_facility: string }
+        Returns: number
+      }
       recalc_bbc_header: {
         Args: { p_report: string }
         Returns: undefined
+      }
+      statement_header: {
+        Args: { p_end: string; p_facility: string; p_start: string }
+        Returns: {
+          accrued_interest_eom: number
+          closing_principal: number
+          interest_posted: number
+          opening_principal: number
+        }[]
+      }
+      statement_txns: {
+        Args: { p_end: string; p_facility: string; p_start: string }
+        Returns: {
+          amount: number
+          effective_at: string
+          id: string
+          memo: string
+          type: Database["public"]["Enums"]["txn_type"]
+        }[]
       }
       user_customer_id: {
         Args: { uid: string }

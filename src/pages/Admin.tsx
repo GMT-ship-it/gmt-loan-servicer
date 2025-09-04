@@ -62,6 +62,18 @@ type AdminBbcItem = {
 
 type Compliance = { docsOk: boolean; bbcOk: boolean; limitOk: boolean; available: number };
 
+type ExposureRow = {
+  facility_id: string;
+  customer_name: string;
+  credit_limit: number;
+  principal_outstanding: number;
+  available_to_draw: number;
+  utilization_pct: number;
+  last_bbc_date: string | null;
+  bbc_approved_within_45d: boolean;
+  last_draw_decided_at: string | null;
+};
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -116,6 +128,10 @@ export default function AdminPage() {
 
   // Compliance state
   const [complianceByDraw, setComplianceByDraw] = useState<Record<string, Compliance>>({});
+
+  // Exposure state
+  const [exposure, setExposure] = useState<ExposureRow[]>([]);
+  const [loadingExposure, setLoadingExposure] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -175,6 +191,9 @@ export default function AdminPage() {
         .limit(50);
 
       if (!repErr) setBbcs(reps || []);
+
+      // Load exposure data
+      await loadExposure();
 
       setLoading(false);
     })();
@@ -338,6 +357,7 @@ export default function AdminPage() {
       await fetchDocsForDraws((drs || []).map(d => d.id));
       await computeComplianceFor(drs || []);
     }
+    await loadExposure(); // Refresh exposure after draw decisions
   }
 
   function setNotes(id: string, v: string) {
@@ -376,6 +396,13 @@ export default function AdminPage() {
     }
 
     setComplianceByDraw(result);
+  }
+
+  async function loadExposure() {
+    setLoadingExposure(true);
+    const { data, error } = await supabase.rpc('lender_exposure_snapshot');
+    setLoadingExposure(false);
+    if (!error) setExposure(data || []);
   }
 
   async function loadBbcItems(reportId: string) {
@@ -424,6 +451,7 @@ export default function AdminPage() {
       .order('period_end', { ascending: false })
       .limit(50);
     if (!repErr) setBbcs(reps || []);
+    await loadExposure(); // Refresh exposure after BBC decisions
   }
 
   function setBbcDecisionNotes(id: string, v: string) {
@@ -497,6 +525,55 @@ export default function AdminPage() {
             ))}
           </ul>
           {customers.length === 0 && <p className="text-muted-foreground">No customers yet.</p>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>Lender Exposure</CardTitle>
+          <Button variant="outline" onClick={loadExposure} disabled={loadingExposure}>
+            {loadingExposure ? 'Refreshing…' : 'Refresh'}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {exposure.length === 0 ? (
+            <div className="text-muted-foreground">No active facilities.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left border-b">
+                    <th className="py-2 pr-4">Customer</th>
+                    <th className="py-2 pr-4">Facility</th>
+                    <th className="py-2 pr-4">Credit Limit</th>
+                    <th className="py-2 pr-4">Outstanding</th>
+                    <th className="py-2 pr-4">Available</th>
+                    <th className="py-2 pr-4">Utilization</th>
+                    <th className="py-2 pr-4">BBC ≤45d</th>
+                    <th className="py-2 pr-4">Last Draw</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exposure.map((r) => (
+                    <tr key={r.facility_id} className="border-b last:border-0">
+                      <td className="py-2 pr-4">{r.customer_name}</td>
+                      <td className="py-2 pr-4 font-mono">{r.facility_id}</td>
+                      <td className="py-2 pr-4">{r.credit_limit.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
+                      <td className="py-2 pr-4">{r.principal_outstanding.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
+                      <td className="py-2 pr-4">{r.available_to_draw.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
+                      <td className="py-2 pr-4">{r.utilization_pct.toFixed(2)}%</td>
+                      <td className="py-2 pr-4">
+                        <span className={`px-2 py-0.5 rounded ${r.bbc_approved_within_45d ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                          {r.bbc_approved_within_45d ? 'OK' : 'Stale'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">{r.last_draw_decided_at ? new Date(r.last_draw_decided_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

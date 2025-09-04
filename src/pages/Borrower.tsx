@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+// @ts-ignore
+import jsPDF from 'jspdf';
+// @ts-ignore
+import 'jspdf-autotable';
 
 type Profile = { role: 'borrower_admin'|'borrower_user'|'lender_admin'|'lender_analyst'; customer_id: string | null };
 type Customer = { id: string; legal_name: string };
@@ -72,6 +76,10 @@ export default function BorrowerPage() {
   const [bbcPeriodEnd, setBbcPeriodEnd] = useState<string>(new Date().toISOString().slice(0,10));
   const [creatingBbc, setCreatingBbc] = useState(false);
 
+  // Statement PDF state
+  const [stmtMonth, setStmtMonth] = useState<string>(new Date().toISOString().slice(0,7)); // YYYY-MM
+  const [stmtLoading, setStmtLoading] = useState(false);
+
   const [itemForm, setItemForm] = useState({
     item_type: 'accounts_receivable' as BbcItemType,
     ref: '', note: '', amount: '10000', ineligible: false, haircut_rate: '0.0000'
@@ -82,6 +90,16 @@ export default function BorrowerPage() {
   const tooSmall = facility ? reqAmt > 0 && reqAmt < (facility.min_advance ?? 0) : false;
   const tooLarge = available != null ? reqAmt > available : false;
   const invalidAmt = Number.isNaN(reqAmt) || reqAmt <= 0 || tooSmall || tooLarge;
+
+  function monthBounds(yyyyMm: string): { start: string; end: string } {
+    const [y, m] = yyyyMm.split('-').map(Number);
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const end = new Date(Date.UTC(y, m, 0)); // last day of month
+    return {
+      start: start.toISOString().slice(0, 10),
+      end: end.toISOString().slice(0, 10),
+    };
+  }
 
   useEffect(() => {
     (async () => {
@@ -402,6 +420,61 @@ export default function BorrowerPage() {
     if (rep) setBbc(rep);
   }
 
+  async function downloadStatementPdf() {
+    if (!facility?.id) { setErr('No facility found'); return; }
+    setStmtLoading(true); setErr(null);
+    try {
+      const { start, end } = monthBounds(stmtMonth);
+
+      const [{ data: header, error: hErr }, { data: lines, error: lErr }] = await Promise.all([
+        supabase.rpc('statement_header', { p_facility: facility.id, p_start: start, p_end: end }),
+        supabase.rpc('statement_txns', { p_facility: facility.id, p_start: start, p_end: end })
+      ]);
+      if (hErr) throw hErr;
+      if (lErr) throw lErr;
+
+      const hdr = Array.isArray(header) ? header[0] : header;
+      const txns = Array.isArray(lines) ? lines : [];
+
+      const doc = new jsPDF();
+
+      // Header
+      doc.setFontSize(14);
+      doc.text('Mountain Investments — Monthly Statement', 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Facility: ${facility.id}`, 14, 24);
+      doc.text(`Period: ${start} to ${end}`, 14, 30);
+
+      // Snapshot
+      const money = (n: number) => (Number(n || 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+      doc.text(`Opening Principal: ${money(hdr?.opening_principal)}`, 14, 38);
+      doc.text(`Closing Principal: ${money(hdr?.closing_principal)}`, 14, 44);
+      doc.text(`Interest Posted:  ${money(hdr?.interest_posted)}`, 14, 50);
+      doc.text(`Accrued (EOM, unposted): ${money(hdr?.accrued_interest_eom)}`, 14, 56);
+
+      // Table of transactions
+      // @ts-ignore
+      doc.autoTable({
+        startY: 64,
+        head: [['Date/Time', 'Type', 'Amount', 'Memo']],
+        body: txns.map((t: any) => [
+          new Date(t.effective_at).toLocaleString(),
+          String(t.type),
+          money(t.amount),
+          t.memo || ''
+        ]),
+        styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [0, 0, 0] }
+      });
+
+      doc.save(`statement_${stmtMonth}.pdf`);
+    } catch (e: any) {
+      setErr(e.message || 'Failed to generate statement');
+    } finally {
+      setStmtLoading(false);
+    }
+  }
+
   if (loading) return <div className="p-6">Loading borrower…</div>;
   if (err) return <div className="p-6 text-destructive">Error: {err}</div>;
 
@@ -467,6 +540,24 @@ export default function BorrowerPage() {
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Monthly Statement</CardTitle></CardHeader>
+        <CardContent className="flex items-end gap-3">
+          <div className="grid gap-1">
+            <label className="text-sm">Month</label>
+            <input
+              type="month"
+              value={stmtMonth}
+              onChange={(e) => setStmtMonth(e.target.value)}
+              className="border rounded px-3 py-2"
+            />
+          </div>
+          <Button onClick={downloadStatementPdf} disabled={!facility?.id || stmtLoading}>
+            {stmtLoading ? 'Preparing…' : 'Download PDF'}
+          </Button>
         </CardContent>
       </Card>
 
