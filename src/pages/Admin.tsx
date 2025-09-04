@@ -60,6 +60,8 @@ type AdminBbcItem = {
   created_at: string;
 };
 
+type Compliance = { docsOk: boolean; bbcOk: boolean; limitOk: boolean; available: number };
+
 export default function AdminPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,9 @@ export default function AdminPage() {
   const [bbcNotes, setBbcNotes] = useState<Record<string, string>>({});
   const [decidingBbcId, setDecidingBbcId] = useState<string | null>(null);
 
+  // Compliance state
+  const [complianceByDraw, setComplianceByDraw] = useState<Record<string, Compliance>>({});
+
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -159,6 +164,7 @@ export default function AdminPage() {
       else {
         setDraws(drs || []);
         await fetchDocsForDraws((drs || []).map(d => d.id));
+        await computeComplianceFor(drs || []);
       }
 
       // Load recent BBCs (newest period first). Lender RLS lets you see all.
@@ -221,6 +227,7 @@ export default function AdminPage() {
     if (!rErr) {
       setDraws(drs || []);
       await fetchDocsForDraws((drs || []).map(d => d.id));
+      await computeComplianceFor(drs || []);
     }
   }
 
@@ -329,11 +336,46 @@ export default function AdminPage() {
     if (!rErr) {
       setDraws(drs || []);
       await fetchDocsForDraws((drs || []).map(d => d.id));
+      await computeComplianceFor(drs || []);
     }
   }
 
   function setNotes(id: string, v: string) {
     setDecisionNotes(prev => ({ ...prev, [id]: v }));
+  }
+
+  async function computeComplianceFor(draws: { id: string; facility_id: string; amount: number; required_docs_ok: boolean; }[]) {
+    const result: Record<string, Compliance> = {};
+
+    // Pre-group by facility to avoid redundant RPCs
+    const uniqueFacilityIds = Array.from(new Set(draws.map(d => d.facility_id)));
+
+    // Fetch availability per facility
+    const availabilityMap: Record<string, number> = {};
+    await Promise.all(uniqueFacilityIds.map(async (fid) => {
+      const { data: avail } = await supabase.rpc('facility_available_to_draw', { p_facility: fid });
+      availabilityMap[fid] = Number(avail ?? 0);
+    }));
+
+    // Fetch BBC freshness per facility
+    const bbcOkMap: Record<string, boolean> = {};
+    await Promise.all(uniqueFacilityIds.map(async (fid) => {
+      const { data: ok } = await supabase.rpc('facility_has_recent_approved_bbc', { p_facility: fid, p_days: 45 });
+      bbcOkMap[fid] = !!ok;
+    }));
+
+    // Assemble per-draw
+    for (const d of draws) {
+      const available = availabilityMap[d.facility_id] ?? 0;
+      result[d.id] = {
+        docsOk: !!d.required_docs_ok,
+        bbcOk: !!bbcOkMap[d.facility_id],
+        limitOk: Number(d.amount) <= Number(available),
+        available
+      };
+    }
+
+    setComplianceByDraw(result);
   }
 
   async function loadBbcItems(reportId: string) {
@@ -656,6 +698,27 @@ export default function AdminPage() {
                     <div className="text-xs uppercase tracking-wide">{d.status}</div>
                   </div>
 
+                  {/* Compliance badges */}
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {(() => {
+                      const c = complianceByDraw[d.id];
+                      if (!c) return null;
+                      return (
+                        <>
+                          <span className={`px-2 py-0.5 rounded ${c.docsOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            Docs {c.docsOk ? 'OK' : 'Missing'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded ${c.bbcOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded ${c.limitOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
+                          </span>
+                        </>
+                      );
+                    })()}
+                  </div>
+
                   <div className="grid gap-1">
                     <label className="text-sm">Decision notes (optional)</label>
                     <Input
@@ -711,14 +774,29 @@ export default function AdminPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      disabled={decidingId === d.id || d.status === 'approved' || !d.required_docs_ok}
-                      onClick={()=>decideDraw(d.id, 'approved')}
-                      title={!d.required_docs_ok ? 'Mark Required docs OK before approval' : undefined}
-                    >
-                      {decidingId === d.id ? 'Saving…' : 'Approve'}
-                    </Button>
+                    {(() => {
+                      const c = complianceByDraw[d.id];
+                      return (
+                        <Button
+                          variant="outline"
+                          disabled={
+                            decidingId === d.id ||
+                            d.status === 'approved' ||
+                            !c || !c.docsOk || !c.bbcOk || !c.limitOk
+                          }
+                          title={
+                            !c ? 'Checking compliance…'
+                              : !c.docsOk ? 'Docs not marked OK'
+                              : !c.bbcOk ? 'No approved BBC within 45 days'
+                              : !c.limitOk ? `Amount exceeds availability (${(c.available||0).toLocaleString('en-US',{style:'currency',currency:'USD'})})`
+                              : undefined
+                          }
+                          onClick={()=>decideDraw(d.id, 'approved')}
+                        >
+                          {decidingId === d.id ? 'Saving…' : 'Approve'}
+                        </Button>
+                      );
+                    })()}
                     <Button
                       variant="destructive"
                       disabled={decidingId === d.id || d.status === 'rejected'}
