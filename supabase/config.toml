@@ -1,1 +1,4 @@
 project_id = "ogmrcygjqqugcwzaioxc"
+
+[functions.post-interest-eod]
+verify_jwt = false
