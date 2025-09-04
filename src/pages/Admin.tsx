@@ -510,15 +510,15 @@ export default function AdminPage() {
                           if (!c) return null;
                           return (
                             <>
-                              <span className={`px-2 py-0.5 rounded ${c.docsOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                Docs {c.docsOk ? 'OK' : 'Missing'}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded ${c.bbcOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
-                              </span>
-                              <span className={`px-2 py-0.5 rounded ${c.limitOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
-                              </span>
+                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.docsOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                                 Docs {c.docsOk ? 'OK' : 'Missing'}
+                               </span>
+                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.bbcOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                                 BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
+                               </span>
+                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${c.limitOk ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                                 Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
+                               </span>
                             </>
                           );
                         })()}
@@ -547,15 +547,15 @@ export default function AdminPage() {
                                     {' '}• {doc.mime_type || 'file'} • {(doc.size_bytes ?? 0).toLocaleString()} bytes
                                   </span>
                                 </div>
-                                <button
-                                  className="text-xs underline"
-                                  onClick={async () => {
-                                    const url = await getSignedUrl(doc.path);
-                                    if (url) window.open(url, '_blank');
-                                  }}
-                                >
-                                  Download
-                                </button>
+                                 <button
+                                   className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 hover:no-underline transition-colors"
+                                   onClick={async () => {
+                                     const url = await getSignedUrl(doc.path);
+                                     if (url) window.open(url, '_blank');
+                                   }}
+                                 >
+                                   Download
+                                 </button>
                               </div>
                             ))}
                           </div>
