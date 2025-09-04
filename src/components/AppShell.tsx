@@ -9,7 +9,7 @@ export default function AppShell() {
       <header className="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link to="/" className="text-2xl font-extrabold tracking-tight" style={{ color: '#E50914' }}>
+            <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
               SummitLine
             </Link>
             <nav className="hidden md:flex items-center gap-5 text-sm text-neutral-300">

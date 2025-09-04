@@ -523,13 +523,13 @@ export default function BorrowerPage() {
     <>
       {/* Hero header */}
       <div className="mt-8">
-        <div
-          className="rounded-2xl overflow-hidden relative"
-          style={{
-            background:
-              'radial-gradient(120% 120% at 0% 0%, rgba(229,9,20,0.35) 0%, rgba(229,9,20,0.06) 40%, transparent 70%)',
-          }}
-        >
+         <div
+           className="rounded-2xl overflow-hidden relative"
+           style={{
+             background:
+               'radial-gradient(120% 120% at 0% 0%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.02) 40%, transparent 70%)',
+           }}
+         >
           <div className="p-6 md:p-10">
             <h1 className="text-2xl md:text-3xl font-extrabold">Welcome back</h1>
             <p className="text-neutral-300 mt-2">Your credit line at a glance</p>
@@ -540,7 +540,7 @@ export default function BorrowerPage() {
                   const drawSection = document.querySelector('[data-section="draw-request"]');
                   drawSection?.scrollIntoView({ behavior: 'smooth' });
                 }}
-                className="bg-[#E50914] text-white hover:opacity-90"
+                className="bg-white text-black hover:bg-white/90"
               >
                 Request Funds
               </Button>

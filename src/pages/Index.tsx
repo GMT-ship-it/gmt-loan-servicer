@@ -28,7 +28,7 @@ const Index = () => {
           
           {/* Main Content */}
           <div className="space-y-6">
-            <div className="text-2xl md:text-3xl font-extrabold text-white" style={{ color: '#E50914' }}>
+            <div className="text-2xl md:text-3xl font-extrabold text-white">
               SummitLine
             </div>
             <p className="text-xl md:text-2xl text-white/90 font-light">
@@ -44,7 +44,7 @@ const Index = () => {
             <Button 
               onClick={() => navigate('/login')}
               size="lg"
-              className="bg-[#E50914] hover:bg-[#E50914]/90 text-white px-8 py-4 text-lg font-semibold rounded-lg shadow-2xl hover:shadow-xl transition-all duration-300 hover:scale-105"
+              className="bg-white text-black hover:bg-white/90 px-8 py-4 text-lg font-semibold rounded-lg shadow-2xl hover:shadow-xl transition-all duration-300 hover:scale-105"
             >
               Access Portal
             </Button>
