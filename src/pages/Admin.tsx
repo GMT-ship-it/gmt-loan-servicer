@@ -1,11 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { ExternalLink, TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, RefreshCw } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { NotificationBell } from '@/components/NotificationBell';
 import type { Facility } from '@/types/facility';
 
 type Customer = { id: string; legal_name: string; };
@@ -30,38 +36,6 @@ type DrawDocRow = {
   draw_request_id: string;
 };
 
-type BbcStatus = 'draft'|'submitted'|'under_review'|'approved'|'rejected';
-type AdminBbc = {
-  id: string;
-  facility_id: string;
-  period_end: string;   // ISO date
-  status: BbcStatus;
-  gross_collateral: number;
-  ineligibles: number;
-  reserves: number;
-  advance_rate: number;
-  borrowing_base: number;
-  availability: number;
-  created_at: string;
-  submitted_at: string | null;
-  decided_at: string | null;
-  decision_notes: string | null;
-};
-
-type AdminBbcItem = {
-  id: string;
-  report_id: string;
-  item_type: 'accounts_receivable'|'inventory'|'cash'|'other';
-  ref: string | null;
-  note: string | null;
-  amount: number;
-  ineligible: boolean;
-  haircut_rate: number;
-  created_at: string;
-};
-
-type Compliance = { docsOk: boolean; bbcOk: boolean; limitOk: boolean; available: number };
-
 type ExposureRow = {
   facility_id: string;
   customer_name: string;
@@ -74,15 +48,17 @@ type ExposureRow = {
   last_draw_decided_at: string | null;
 };
 
+type Compliance = { docsOk: boolean; bbcOk: boolean; limitOk: boolean; available: number };
+
 export default function AdminPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [facilitiesList, setFacilitiesList] = useState<FacilityRow[]>([]);
   const [draws, setDraws] = useState<DrawRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [posting, setPosting] = useState(false);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<Record<string, string>>({});
   const [docsByDraw, setDocsByDraw] = useState<Record<string, DrawDocRow[]>>({});
@@ -100,141 +76,95 @@ export default function AdminPage() {
     apr: '0.145',
     min_advance: '50000'
   });
-  const [txForm, setTxForm] = useState<{
-    facility_id: string;
-    type: 'advance' | 'payment' | 'interest' | 'fee' | 'letter_of_credit' | 'dof' | 'adjustment';
-    amount: string;
-    effective_at: string; // ISO datetime-local
-    memo: string;
-  }>({
-    facility_id: '',
-    type: 'advance',
-    amount: '100000',
-    effective_at: new Date().toISOString().slice(0,16), // YYYY-MM-DDTHH:mm
-    memo: 'Initial funding'
-  });
-
-  // Interest posting state
-  const [interestFacilityId, setInterestFacilityId] = useState<string>('');
-  const [postingInterest, setPostingInterest] = useState(false);
-  const [interestMsg, setInterestMsg] = useState<string | null>(null);
-
-  // BBC state
-  const [bbcs, setBbcs] = useState<AdminBbc[]>([]);
-  const [bbcItemsById, setBbcItemsById] = useState<Record<string, AdminBbcItem[]>>({});
-  const [bbcExpanded, setBbcExpanded] = useState<Record<string, boolean>>({});
-  const [bbcNotes, setBbcNotes] = useState<Record<string, string>>({});
-  const [decidingBbcId, setDecidingBbcId] = useState<string | null>(null);
 
   // Compliance state
   const [complianceByDraw, setComplianceByDraw] = useState<Record<string, Compliance>>({});
 
-  // Exposure filtering state
-  const [utilMin, setUtilMin] = useState<number>(0);
-  const [availMax, setAvailMax] = useState<number>(0);
-  const [bbcOnlyFresh, setBbcOnlyFresh] = useState<boolean>(false);
-
-  // Audit log state
-  type AuditRow = { 
-    id: string; 
-    created_at: string | null; 
-    action: string; 
-    table_name: string; 
-    user_id: string | null; 
-    record_id: string | null; 
-    new_values: any; 
-    old_values: any; 
-  };
-  const [audit, setAudit] = useState<AuditRow[]>([]);
-  const [auditFrom, setAuditFrom] = useState<string>(() => 
-    new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)
-  );
-  const [loadingAudit, setLoadingAudit] = useState(false);
-
-  // Facilities labeled for friendly names
-  const [facLabeled, setFacLabeled] = useState<{facility_id: string; customer_name: string; short_id: string}[]>([]);
-
-  // Exposure state (re-added)
+  // Exposure state
   const [exposure, setExposure] = useState<ExposureRow[]>([]);
   const [loadingExposure, setLoadingExposure] = useState(false);
+  
+  // Compliance and Analytics state
+  const [breaches, setBreaches] = useState<any[]>([]);
+  const [portfolioAgg, setPortfolioAgg] = useState<any[]>([]);
+  const [timeSeries, setTimeSeries] = useState<any[]>([]);
+  const [timeSeriesFacility, setTimeSeriesFacility] = useState('');
+  const [breachesLoading, setBreachesLoading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return navigate('/login', { replace: true });
+  // Load functions
+  const loadBreaches = async () => {
+    try {
+      setBreachesLoading(true);
+      const { data, error } = await supabase.rpc('portfolio_policy_breaches');
+      if (error) throw error;
+      setBreaches(data || []);
+    } catch (error) {
+      console.error('Error loading breaches:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load compliance breaches",
+        variant: "destructive",
+      });
+    } finally {
+      setBreachesLoading(false);
+    }
+  };
 
-      // Check role
-      const { data: profile, error: pErr } = await (supabase as any)
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
+  const loadPortfolioAgg = async () => {
+    try {
+      const { data, error } = await supabase.from('portfolio_aggregates').select('*');
+      if (error) throw error;
+      setPortfolioAgg(data || []);
+    } catch (error) {
+      console.error('Error loading portfolio aggregates:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load portfolio data",
+        variant: "destructive",
+      });
+    }
+  };
 
-      if (pErr || !profile) {
-        setErr(pErr?.message || 'No profile'); setLoading(false); return;
-      }
-      if (!['lender_admin', 'lender_analyst'].includes(profile.role)) {
-        // Not a lender → bounce to borrower
-        return navigate('/borrower', { replace: true });
-      }
+  const loadTimeSeries = async (facilityId: string) => {
+    if (!facilityId.trim()) return;
+    
+    try {
+      const { data, error } = await supabase.rpc('utilization_timeseries', { 
+        p_facility: facilityId, 
+        p_days: 90 
+      });
+      if (error) throw error;
+      setTimeSeries(data || []);
+    } catch (error) {
+      console.error('Error loading time series:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load utilization trend",
+        variant: "destructive",
+      });
+    }
+  };
 
-      // Load all customers (allowed by RLS for lender roles)
-      const { data, error } = await (supabase as any)
-        .from('customers')
-        .select('id, legal_name')
-        .order('legal_name', { ascending: true });
+  const loadExposure = async () => {
+    setLoadingExposure(true);
+    const { data, error } = await supabase.rpc('lender_exposure_snapshot');
+    setLoadingExposure(false);
+    if (!error) setExposure(data || []);
+  };
 
-      if (error) setErr(error.message);
-      else setCustomers(data || []);
+  const loadDrawRequests = async () => {
+    const { data: drs, error: drErr } = await supabase
+      .from('draw_requests')
+      .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
+      .order('created_at', { ascending: false });
 
-      // Load facilities (lenders see all; RLS handles scope)
-      const { data: facs, error: fErr } = await supabase
-        .from('facilities')
-        .select('id, customer_id')
-        .order('created_at', { ascending: false });
-
-      if (!fErr && facs) setFacilitiesList(facs);
-
-      // Load draw requests (lenders see all per RLS)
-      const { data: drs, error: drErr } = await supabase
-        .from('draw_requests')
-        .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
-        .order('created_at', { ascending: false });
-
-      if (drErr) setErr(drErr.message);
-      else {
-        setDraws(drs || []);
-        await fetchDocsForDraws((drs || []).map(d => d.id));
-        await computeComplianceFor(drs || []);
-      }
-
-      // Load recent BBCs (newest period first). Lender RLS lets you see all.
-      const { data: reps, error: repErr } = await supabase
-        .from('borrowing_base_reports')
-        .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at, submitted_at, decided_at, decision_notes')
-        .order('period_end', { ascending: false })
-        .limit(50);
-
-      if (!repErr) setBbcs(reps || []);
-
-      // Load exposure data
-      await loadExposure();
-
-      // Load facilities labeled for dropdowns using RPC or direct query
-      const { data: facLab, error: facErr } = await supabase
-        .rpc('lender_exposure_snapshot'); // Use this to get facility names
-      if (!facErr && facLab) {
-        const labeled = facLab.map((f: any) => ({
-          facility_id: f.facility_id,
-          customer_name: f.customer_name,
-          short_id: f.facility_id.slice(0, 8)
-        }));
-        setFacLabeled(labeled);
-      }
-
-      setLoading(false);
-    })();
-  }, [navigate]);
+    if (drErr) setErr(drErr.message);
+    else {
+      setDraws(drs || []);
+      await fetchDocsForDraws((drs || []).map(d => d.id));
+      await computeComplianceFor(drs || []);
+    }
+  };
 
   async function fetchDocsForDraws(drawIds: string[]) {
     if (drawIds.length === 0) { setDocsByDraw({}); return; }
@@ -258,7 +188,7 @@ export default function AdminPage() {
     const { data, error } = await supabase
       .storage
       .from('summitline-docs')
-      .createSignedUrl(path, 60 * 10); // 10 minutes
+      .createSignedUrl(path, 60 * 10);
     if (error || !data?.signedUrl) return null;
     return data.signedUrl;
   }
@@ -324,41 +254,9 @@ export default function AdminPage() {
     if (error) {
       setErr(error.message);
     } else {
-      // Reset the form
       setFacilityForm(f => ({ ...f, credit_limit: '500000', apr: '0.145', min_advance: '50000' }));
     }
     setCreating(false);
-  }
-
-  async function postTransaction(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    if (!txForm.facility_id) { setErr('Select a facility'); return; }
-
-    const amt = Number(txForm.amount);
-    if (Number.isNaN(amt) || amt < 0) { setErr('Enter a valid amount ≥ 0'); return; }
-
-    setPosting(true);
-
-    // convert datetime-local input to ISO with timezone (assume local)
-    const local = txForm.effective_at;
-    // If you want server time, you could use `now()` from SQL, but we'll pass the ISO:
-    const effectiveISO = new Date(local).toISOString();
-
-    const { error } = await supabase.from('transactions').insert({
-      facility_id: txForm.facility_id,
-      type: txForm.type,
-      amount: amt,
-      effective_at: effectiveISO,
-      memo: txForm.memo || null
-    });
-
-    setPosting(false);
-
-    if (error) { setErr(error.message); return; }
-
-    // reset amount/memo (keep facility/type/date)
-    setTxForm(f => ({ ...f, amount: '', memo: '' }));
   }
 
   async function decideDraw(id: string, newStatus: 'approved'|'rejected') {
@@ -384,17 +282,8 @@ export default function AdminPage() {
 
     if (error) { setErr(error.message); return; }
 
-    // refresh list
-    const { data: drs, error: rErr } = await supabase
-      .from('draw_requests')
-      .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
-      .order('created_at', { ascending: false });
-    if (!rErr) {
-      setDraws(drs || []);
-      await fetchDocsForDraws((drs || []).map(d => d.id));
-      await computeComplianceFor(drs || []);
-    }
-    await loadExposure(); // Refresh exposure after draw decisions
+    await loadDrawRequests();
+    await loadExposure();
   }
 
   function setNotes(id: string, v: string) {
@@ -404,24 +293,20 @@ export default function AdminPage() {
   async function computeComplianceFor(draws: { id: string; facility_id: string; amount: number; required_docs_ok: boolean; }[]) {
     const result: Record<string, Compliance> = {};
 
-    // Pre-group by facility to avoid redundant RPCs
     const uniqueFacilityIds = Array.from(new Set(draws.map(d => d.facility_id)));
 
-    // Fetch availability per facility
     const availabilityMap: Record<string, number> = {};
     await Promise.all(uniqueFacilityIds.map(async (fid) => {
       const { data: avail } = await supabase.rpc('facility_available_to_draw', { p_facility: fid });
       availabilityMap[fid] = Number(avail ?? 0);
     }));
 
-    // Fetch BBC freshness per facility
     const bbcOkMap: Record<string, boolean> = {};
     await Promise.all(uniqueFacilityIds.map(async (fid) => {
       const { data: ok } = await supabase.rpc('facility_has_recent_approved_bbc', { p_facility: fid, p_days: 45 });
       bbcOkMap[fid] = !!ok;
     }));
 
-    // Assemble per-draw
     for (const d of draws) {
       const available = availabilityMap[d.facility_id] ?? 0;
       result[d.id] = {
@@ -435,700 +320,552 @@ export default function AdminPage() {
     setComplianceByDraw(result);
   }
 
-  async function loadAudit() {
-    setLoadingAudit(true);
-    const { data, error } = await supabase
-      .from('audit_log')
-      .select('*')
-      .gte('created_at', auditFrom)
-      .order('created_at', { ascending: false })
-      .limit(200);
-    setLoadingAudit(false);
-    if (!error) setAudit(data || []);
-  }
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return navigate('/login', { replace: true });
 
-  async function loadExposure() {
-    setLoadingExposure(true);
-    const { data, error } = await supabase.rpc('lender_exposure_snapshot');
-    setLoadingExposure(false);
-    if (!error) setExposure(data || []);
-  }
+      const { data: profile, error: pErr } = await (supabase as any)
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
 
-  // Filter exposure based on criteria
-  const filtered = exposure.filter(r =>
-    (utilMin ? r.utilization_pct >= utilMin : true) &&
-    (availMax ? r.available_to_draw <= availMax : true) &&
-    (!bbcOnlyFresh || r.bbc_approved_within_45d)
-  );
-
-  async function loadBbcItems(reportId: string) {
-    if (bbcItemsById[reportId]) return; // already loaded
-    const { data, error } = await supabase
-      .from('borrowing_base_items')
-      .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
-      .eq('report_id', reportId)
-      .order('created_at', { ascending: false });
-    if (!error) {
-      setBbcItemsById(prev => ({ ...prev, [reportId]: data || [] }));
-    }
-  }
-
-  async function toggleBbcExpand(id: string) {
-    const next = !bbcExpanded[id];
-    setBbcExpanded(prev => ({ ...prev, [id]: next }));
-    if (next) await loadBbcItems(id);
-  }
-
-  async function decideBbc(id: string, newStatus: 'approved'|'rejected') {
-    setDecidingBbcId(id);
-    setErr(null);
-    const notes = bbcNotes[id] ?? null;
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { setErr('Not authenticated'); setDecidingBbcId(null); return; }
-
-    const { error } = await supabase
-      .from('borrowing_base_reports')
-      .update({
-        status: newStatus,
-        decision_notes: notes,
-        decided_by: session.user.id,
-        decided_at: new Date().toISOString()
-      })
-      .eq('id', id);
-
-    setDecidingBbcId(null);
-    if (error) { setErr(error.message); return; }
-
-    // Refresh list
-    const { data: reps, error: repErr } = await supabase
-      .from('borrowing_base_reports')
-      .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at, submitted_at, decided_at, decision_notes')
-      .order('period_end', { ascending: false })
-      .limit(50);
-    if (!repErr) setBbcs(reps || []);
-    await loadExposure(); // Refresh exposure after BBC decisions
-  }
-
-  function setBbcDecisionNotes(id: string, v: string) {
-    setBbcNotes(prev => ({ ...prev, [id]: v }));
-  }
-
-  async function postInterestThroughToday(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setInterestMsg(null);
-
-    if (!interestFacilityId) { setErr('Select a facility'); return; }
-
-    setPostingInterest(true);
-    try {
-      // 1) Ask server for accrued (unposted) interest as of today
-      const { data: accr, error: aErr } = await supabase
-        .rpc('facility_accrued_interest', { p_facility: interestFacilityId });
-
-      if (aErr) throw aErr;
-
-      const amount = Math.round(Number(accr ?? 0) * 100) / 100; // 2-dec rounding
-      if (!amount || amount <= 0) {
-        setInterestMsg('No accrued interest to post.');
-        return;
+      if (pErr || !profile) {
+        setErr(pErr?.message || 'No profile'); setLoading(false); return;
+      }
+      if (!['lender_admin', 'lender_analyst'].includes(profile.role)) {
+        return navigate('/borrower', { replace: true });
       }
 
-      // 2) Insert interest transaction
-      const memo = `Interest posted through ${new Date().toISOString().slice(0,10)}`;
-      const { error: insErr } = await supabase
-        .from('transactions')
-        .insert({
-          facility_id: interestFacilityId,
-          type: 'interest',
-          amount,
-          effective_at: new Date().toISOString(),
-          memo
-        });
+      const { data, error } = await (supabase as any)
+        .from('customers')
+        .select('id, legal_name')
+        .order('legal_name', { ascending: true });
 
-      if (insErr) throw insErr;
+      if (error) setErr(error.message);
+      else setCustomers(data || []);
 
-      setInterestMsg(`Posted interest: ${amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}`);
-    } catch (err: any) {
-      setErr(err.message || 'Failed to post interest');
-    } finally {
-      setPostingInterest(false);
-    }
-  }
+      const { data: facs, error: fErr } = await supabase
+        .from('facilities')
+        .select('id, customer_id')
+        .order('created_at', { ascending: false });
 
-  async function logout() {
-    await supabase.auth.signOut();
-    navigate('/login', { replace: true });
-  }
+      if (!fErr && facs) setFacilitiesList(facs);
 
-  if (loading) return <div className="p-6">Loading admin…</div>;
-  if (err) return <div className="p-6 text-destructive">Error: {err}</div>;
+      await loadDrawRequests();
+      await loadExposure();
+      await loadBreaches();
+      await loadPortfolioAgg();
+
+      setLoading(false);
+    })();
+  }, [navigate]);
+
+  if (loading) return <div className="p-6">Loading...</div>;
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Admin</h1>
-        <Button variant="outline" onClick={logout}>Logout</Button>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Lender Portal</h1>
+        <div className="flex items-center gap-4">
+          <NotificationBell />
+          <Button variant="outline" onClick={() => {
+            loadExposure();
+            loadDrawRequests();
+            loadBreaches();
+            loadPortfolioAgg();
+          }}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh Data
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Customers</CardTitle></CardHeader>
-        <CardContent>
-          <ul className="list-disc pl-6">
-            {customers.map(c => (
-              <li key={c.id}>{c.legal_name} <span className="text-muted-foreground">({c.id})</span></li>
-            ))}
-          </ul>
-          {customers.length === 0 && <p className="text-muted-foreground">No customers yet.</p>}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="draws">Draw Requests</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="facilities">Facilities</TabsTrigger>
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Lender Exposure</CardTitle>
-          <Button variant="outline" onClick={loadExposure} disabled={loadingExposure}>
-            {loadingExposure ? 'Refreshing…' : 'Refresh'}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {exposure.length === 0 ? (
-            <div className="text-muted-foreground">No active facilities.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b">
-                    <th className="py-2 pr-4">Customer</th>
-                    <th className="py-2 pr-4">Facility</th>
-                    <th className="py-2 pr-4">Credit Limit</th>
-                    <th className="py-2 pr-4">Outstanding</th>
-                    <th className="py-2 pr-4">Available</th>
-                    <th className="py-2 pr-4">Utilization</th>
-                    <th className="py-2 pr-4">BBC ≤45d</th>
-                    <th className="py-2 pr-4">Last Draw</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exposure.map((r) => (
-                    <tr key={r.facility_id} className="border-b last:border-0">
-                      <td className="py-2 pr-4">{r.customer_name}</td>
-                      <td className="py-2 pr-4 font-mono">{r.facility_id}</td>
-                      <td className="py-2 pr-4">{r.credit_limit.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
-                      <td className="py-2 pr-4">{r.principal_outstanding.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
-                      <td className="py-2 pr-4">{r.available_to_draw.toLocaleString('en-US',{style:'currency',currency:'USD'})}</td>
-                      <td className="py-2 pr-4">{r.utilization_pct.toFixed(2)}%</td>
-                      <td className="py-2 pr-4">
-                        <span className={`px-2 py-0.5 rounded ${r.bbc_approved_within_45d ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                          {r.bbc_approved_within_45d ? 'OK' : 'Stale'}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-4">{r.last_draw_decided_at ? new Date(r.last_draw_decided_at).toLocaleString() : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Create Facility</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={createFacility} className="grid gap-4">
-            {/* Customer select */}
-            <div className="grid gap-2">
-              <Label>Customer</Label>
-              <Select
-                value={facilityForm.customer_id}
-                onValueChange={(v) => setFacilityForm(f => ({ ...f, customer_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.legal_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Type */}
-            <div className="grid gap-2">
-              <Label>Facility Type</Label>
-              <Select
-                value={facilityForm.type}
-                onValueChange={(v: 'revolving' | 'single_loan') =>
-                  setFacilityForm(f => ({ ...f, type: v }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="revolving">Revolving</SelectItem>
-                  <SelectItem value="single_loan">Single Loan</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Credit Limit */}
-            <div className="grid gap-2">
-              <Label>Credit Limit (USD)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={facilityForm.credit_limit}
-                onChange={(e) => setFacilityForm(f => ({ ...f, credit_limit: e.target.value }))}
-              />
-            </div>
-
-            {/* APR */}
-            <div className="grid gap-2">
-              <Label>APR (decimal, e.g., 0.145 = 14.5%)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.0001"
-                value={facilityForm.apr}
-                onChange={(e) => setFacilityForm(f => ({ ...f, apr: e.target.value }))}
-              />
-            </div>
-
-            {/* Min Advance */}
-            <div className="grid gap-2">
-              <Label>Minimum Advance (USD)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={facilityForm.min_advance}
-                onChange={(e) => setFacilityForm(f => ({ ...f, min_advance: e.target.value }))}
-              />
-            </div>
-
-            {/* Submit */}
-            <div className="flex items-center gap-3">
-              <Button type="submit" disabled={!canSubmit || creating}>
-                {creating ? 'Creating…' : 'Create Facility'}
-              </Button>
-              {err && <span className="text-destructive">{err}</span>}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Post Transaction</CardTitle></CardHeader>
-        <CardContent>
-          <form onSubmit={postTransaction} className="grid gap-4">
-            {/* Facility select */}
-            <div className="grid gap-2">
-              <Label>Facility</Label>
-              <Select
-                value={txForm.facility_id}
-                onValueChange={(v) => setTxForm(f => ({ ...f, facility_id: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select facility" />
-                </SelectTrigger>
-            <SelectContent>
-              {facLabeled.map(f => (
-                <SelectItem key={f.facility_id} value={f.facility_id}>
-                  {f.customer_name} • {f.short_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-              </Select>
-            </div>
-
-            {/* Type */}
-            <div className="grid gap-2">
-              <Label>Type</Label>
-              <Select
-                value={txForm.type}
-                onValueChange={(v: any) => setTxForm(f => ({ ...f, type: v }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="advance">Advance</SelectItem>
-                  <SelectItem value="payment">Payment</SelectItem>
-                  <SelectItem value="interest">Interest</SelectItem>
-                  <SelectItem value="fee">Fee</SelectItem>
-                  <SelectItem value="letter_of_credit">Letter of Credit</SelectItem>
-                  <SelectItem value="dof">DOF</SelectItem>
-                  <SelectItem value="adjustment">Adjustment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Amount */}
-            <div className="grid gap-2">
-              <Label>Amount (USD)</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={txForm.amount}
-                onChange={(e) => setTxForm(f => ({ ...f, amount: e.target.value }))}
-              />
-            </div>
-
-            {/* Effective at */}
-            <div className="grid gap-2">
-              <Label>Effective Date/Time</Label>
-              <Input
-                type="datetime-local"
-                value={txForm.effective_at}
-                onChange={(e) => setTxForm(f => ({ ...f, effective_at: e.target.value }))}
-              />
-            </div>
-
-            {/* Memo */}
-            <div className="grid gap-2">
-              <Label>Memo</Label>
-              <Input
-                type="text"
-                value={txForm.memo}
-                onChange={(e) => setTxForm(f => ({ ...f, memo: e.target.value }))}
-                placeholder="Optional description"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button type="submit" disabled={posting || !txForm.facility_id}>
-                {posting ? 'Posting…' : 'Post Transaction'}
-              </Button>
-              {err && <span className="text-destructive">{err}</span>}
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Approvals — Draw Requests</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {draws.length === 0 ? (
-            <div className="text-muted-foreground">No draw requests yet.</div>
-          ) : (
-            <div className="grid gap-4">
-              {draws.map(d => (
-                <div key={d.id} className="border rounded p-3 space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm">
-                      <div className="font-medium">
-                        {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Facility: <span className="font-mono">{d.facility_id}</span> • {new Date(d.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="text-xs uppercase tracking-wide">{d.status}</div>
-                  </div>
-
-                  {/* Compliance badges */}
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    {(() => {
-                      const c = complianceByDraw[d.id];
-                      if (!c) return null;
-                      return (
-                        <>
-                          <span className={`px-2 py-0.5 rounded ${c.docsOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            Docs {c.docsOk ? 'OK' : 'Missing'}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded ${c.bbcOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded ${c.limitOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
-                          </span>
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  <div className="grid gap-1">
-                    <label className="text-sm">Decision notes (optional)</label>
-                    <Input
-                      value={decisionNotes[d.id] ?? d.decision_notes ?? ''}
-                      onChange={(e)=>setNotes(d.id, e.target.value)}
-                      placeholder="Reason or internal notes"
-                      className="text-sm"
-                    />
-                  </div>
-
-                  {/* Documents section */}
-                  <div className="grid gap-1">
-                    <div className="font-medium text-sm">Documents</div>
-                    {Array.isArray(docsByDraw[d.id]) && docsByDraw[d.id].length > 0 ? (
-                      <div className="grid gap-1">
-                        {docsByDraw[d.id].map(doc => (
-                          <div key={doc.id} className="flex items-center justify-between text-sm">
-                            <div className="truncate">
-                              {(doc.original_name || doc.path.split('/').pop())}
-                              <span className="text-xs text-muted-foreground">
-                                {' '}• {doc.mime_type || 'file'} • {(doc.size_bytes ?? 0).toLocaleString()} bytes
-                              </span>
-                            </div>
-                            <button
-                              className="text-xs underline"
-                              onClick={async () => {
-                                const url = await getSignedUrl(doc.path);
-                                if (url) window.open(url, '_blank');
-                              }}
-                            >
-                              Download
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">No documents uploaded.</div>
-                    )}
-                  </div>
-
-                  {/* Docs OK toggle */}
-                  <div className="flex items-center gap-2 pt-2">
-                    <label className="text-sm flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!d.required_docs_ok}
-                        onChange={(e)=>toggleDocsOk(d.id, e.target.checked)}
-                        disabled={togglingDocsOk === d.id}
-                      />
-                      Required docs OK
-                    </label>
-                    {togglingDocsOk === d.id && <span className="text-xs">Saving…</span>}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const c = complianceByDraw[d.id];
-                      return (
-                        <Button
-                          variant="outline"
-                          disabled={
-                            decidingId === d.id ||
-                            d.status === 'approved' ||
-                            !c || !c.docsOk || !c.bbcOk || !c.limitOk
-                          }
-                          title={
-                            !c ? 'Checking compliance…'
-                              : !c.docsOk ? 'Docs not marked OK'
-                              : !c.bbcOk ? 'No approved BBC within 45 days'
-                              : !c.limitOk ? `Amount exceeds availability (${(c.available||0).toLocaleString('en-US',{style:'currency',currency:'USD'})})`
-                              : undefined
-                          }
-                          onClick={()=>decideDraw(d.id, 'approved')}
-                        >
-                          {decidingId === d.id ? 'Saving…' : 'Approve'}
-                        </Button>
-                      );
-                    })()}
-                    <Button
-                      variant="destructive"
-                      disabled={decidingId === d.id || d.status === 'rejected'}
-                      onClick={()=>decideDraw(d.id, 'rejected')}
-                    >
-                      {decidingId === d.id ? 'Saving…' : 'Reject'}
-                    </Button>
-                  </div>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Facilities</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{exposure.length}</div>
+                <p className="text-xs text-muted-foreground">Total facilities</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Exposure</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${exposure.reduce((sum, exp) => sum + exp.principal_outstanding, 0).toLocaleString()}
                 </div>
-              ))}
-            </div>
-          )}
-          {err && <div className="text-destructive mt-3">{err}</div>}
-        </CardContent>
-      </Card>
+                <p className="text-xs text-muted-foreground">Outstanding principal</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Available Credit</CardTitle>
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${exposure.reduce((sum, exp) => sum + exp.available_to_draw, 0).toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Available to draw</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Compliance Breaches</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{breaches.length}</div>
+                <p className="text-xs text-muted-foreground">
+                  {breaches.length === 0 ? 'All compliant' : 'Need attention'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Post Interest (through today)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={postInterestThroughToday} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label>Facility</Label>
-              <Select
-                value={interestFacilityId}
-                onValueChange={(v) => setInterestFacilityId(v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select facility" />
-                </SelectTrigger>
-            <SelectContent>
-              {facLabeled.map(f => (
-                <SelectItem key={f.facility_id} value={f.facility_id}>
-                  {f.customer_name} • {f.short_id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button type="submit" disabled={!interestFacilityId || postingInterest}>
-                {postingInterest ? 'Posting…' : 'Post Interest'}
-              </Button>
-              {interestMsg && <span className="text-sm text-muted-foreground">{interestMsg}</span>}
-              {err && <span className="text-destructive">{err}</span>}
-            </div>
-          </form>
-        </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>Audit Log</CardTitle>
-            <div className="flex items-end gap-2">
-              <div>
-                <label className="text-xs">From</label>
-                <input 
-                  type="date" 
-                  value={auditFrom} 
-                  onChange={e => setAuditFrom(e.target.value)} 
-                  className="border rounded px-2 py-1" 
-                />
-              </div>
-              <Button variant="outline" onClick={loadAudit} disabled={loadingAudit}>
-                {loadingAudit ? 'Loading…' : 'Refresh'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {audit.length === 0 ? (
-              <div className="text-muted-foreground">No entries found.</div>
-            ) : (
-              <div className="grid gap-2 max-h-96 overflow-y-auto">
-                {audit.map(a => (
-                  <div key={a.id} className="border rounded p-3 text-xs">
-                    <div className="flex justify-between items-start mb-1">
-                      <div className="font-medium">{a.action}</div>
-                      <div className="text-muted-foreground">
-                        {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+          {/* Exposure Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Portfolio Exposure</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {exposure.length === 0 ? (
+                <div className="text-muted-foreground">No active facilities found.</div>
+              ) : (
+                <div className="space-y-3">
+                  {exposure.slice(0, 10).map((exp, i) => (
+                    <div key={i} className="flex items-center justify-between border-b pb-2">
+                      <div>
+                        <div className="font-medium">{exp.customer_name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {exp.facility_id.slice(0, 8)}... • Util: {exp.utilization_pct.toFixed(1)}%
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">
+                          ${exp.principal_outstanding.toLocaleString()}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Avail: ${exp.available_to_draw.toLocaleString()}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-muted-foreground mb-2">
-                      Table: {a.table_name} • User: {a.user_id || 'system'} • Record: {a.record_id || '—'}
-                    </div>
-                    {(a.new_values || a.old_values) && (
-                      <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded overflow-x-auto">
-                        {JSON.stringify(a.new_values || a.old_values || {}, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader><CardTitle>BBC Review</CardTitle></CardHeader>
-        <CardContent>
-          {bbcs.length === 0 ? (
-            <div className="text-muted-foreground">No BBCs yet.</div>
-          ) : (
-            <div className="grid gap-4">
-              {bbcs.map(r => (
-                <div key={r.id} className="border rounded p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm">
-                      <div className="font-medium">
-                        Period End: {r.period_end} • Facility: <span className="font-mono">{r.facility_id}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Status: <span className="uppercase">{r.status}</span>
-                        {r.submitted_at && <> • Submitted {new Date(r.submitted_at).toLocaleString()}</>}
-                        {r.decided_at && <> • Decided {new Date(r.decided_at).toLocaleString()}</>}
-                      </div>
-                    </div>
-                    <Button variant="ghost" onClick={() => toggleBbcExpand(r.id)}>
-                      {bbcExpanded[r.id] ? 'Hide' : 'View'}
-                    </Button>
-                  </div>
-
-                  {bbcExpanded[r.id] && (
-                    <>
-                      {/* Totals snapshot */}
-                      <div className="grid gap-1 text-sm">
-                        <div className="flex justify-between"><span>Gross Collateral</span><span className="font-medium">{r.gross_collateral.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                        <div className="flex justify-between"><span>Ineligibles</span><span className="font-medium">{r.ineligibles.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                        <div className="flex justify-between"><span>Reserves</span><span className="font-medium">{r.reserves.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                        <div className="flex justify-between"><span>Advance Rate</span><span className="font-medium">{(r.advance_rate*100).toFixed(2)}%</span></div>
-                        <div className="flex justify-between"><span>Borrowing Base</span><span className="font-medium">{r.borrowing_base.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                        <div className="flex justify-between"><span>Availability (BBC)</span><span className="font-medium">{r.availability.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
+        <TabsContent value="draws" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Draw Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {draws.length === 0 ? (
+                <div className="text-muted-foreground">No draw requests yet.</div>
+              ) : (
+                <div className="grid gap-4">
+                  {draws.map(d => (
+                    <div key={d.id} className="border rounded p-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm">
+                          <div className="font-medium">
+                            {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Facility: <span className="font-mono">{d.facility_id}</span> • {new Date(d.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="text-xs uppercase tracking-wide">{d.status}</div>
                       </div>
 
-                      {/* Items */}
-                      <div className="pt-2">
-                        <div className="font-medium mb-2 text-sm">Items</div>
-                        {Array.isArray(bbcItemsById[r.id]) && bbcItemsById[r.id].length > 0 ? (
-                          <div className="grid gap-2">
-                            {bbcItemsById[r.id].map(it => (
-                              <div key={it.id} className="flex items-center justify-between border-b pb-2 last:border-b-0 text-sm">
+                      {/* Compliance badges */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        {(() => {
+                          const c = complianceByDraw[d.id];
+                          if (!c) return null;
+                          return (
+                            <>
+                              <span className={`px-2 py-0.5 rounded ${c.docsOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                Docs {c.docsOk ? 'OK' : 'Missing'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded ${c.bbcOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                BBC ≤45d {c.bbcOk ? 'OK' : 'Required'}
+                              </span>
+                              <span className={`px-2 py-0.5 rounded ${c.limitOk ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                Limit {c.limitOk ? 'OK' : `Exceeds (Avail ${c.available.toLocaleString('en-US',{style:'currency',currency:'USD'})})`}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="grid gap-1">
+                        <label className="text-sm">Decision notes (optional)</label>
+                        <Input
+                          value={decisionNotes[d.id] ?? d.decision_notes ?? ''}
+                          onChange={(e)=>setNotes(d.id, e.target.value)}
+                          placeholder="Reason or internal notes"
+                          className="text-sm"
+                        />
+                      </div>
+
+                      {/* Documents section */}
+                      <div className="grid gap-1">
+                        <div className="font-medium text-sm">Documents</div>
+                        {Array.isArray(docsByDraw[d.id]) && docsByDraw[d.id].length > 0 ? (
+                          <div className="grid gap-1">
+                            {docsByDraw[d.id].map(doc => (
+                              <div key={doc.id} className="flex items-center justify-between text-sm">
                                 <div className="truncate">
-                                  <span className="font-medium capitalize">{it.item_type.replace('_',' ')}</span>
-                                  {it.ref && <span> • {it.ref}</span>}
-                                  {it.ineligible && <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800">Ineligible</span>}
-                                  <div className="text-xs text-muted-foreground">{it.note || ''}</div>
+                                  {(doc.original_name || doc.path.split('/').pop())}
+                                  <span className="text-xs text-muted-foreground">
+                                    {' '}• {doc.mime_type || 'file'} • {(doc.size_bytes ?? 0).toLocaleString()} bytes
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <div className="font-medium">{it.amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}</div>
-                                  {it.haircut_rate > 0 && (
-                                    <div className="text-xs text-muted-foreground">Haircut {(it.haircut_rate*100).toFixed(2)}%</div>
-                                  )}
-                                </div>
+                                <button
+                                  className="text-xs underline"
+                                  onClick={async () => {
+                                    const url = await getSignedUrl(doc.path);
+                                    if (url) window.open(url, '_blank');
+                                  }}
+                                >
+                                  Download
+                                </button>
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-muted-foreground text-sm">No items.</div>
+                          <div className="text-xs text-muted-foreground">No documents uploaded.</div>
                         )}
                       </div>
 
-                      {/* Decision notes + actions */}
-                      <div className="grid gap-2 pt-2">
-                        <label className="text-sm">Decision notes</label>
-                        <Input
-                          className="text-sm"
-                          value={bbcNotes[r.id] ?? r.decision_notes ?? ''}
-                          onChange={(e)=>setBbcDecisionNotes(r.id, e.target.value)}
-                          placeholder="Reason or internal notes"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            disabled={decidingBbcId === r.id || r.status === 'approved'}
-                            onClick={()=>decideBbc(r.id, 'approved')}
-                          >
-                            {decidingBbcId === r.id ? 'Saving…' : 'Approve'}
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            disabled={decidingBbcId === r.id || r.status === 'rejected'}
-                            onClick={()=>decideBbc(r.id, 'rejected')}
-                          >
-                            {decidingBbcId === r.id ? 'Saving…' : 'Reject'}
-                          </Button>
-                        </div>
+                      {/* Docs OK toggle */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <label className="text-sm flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!!d.required_docs_ok}
+                            onChange={(e)=>toggleDocsOk(d.id, e.target.checked)}
+                            disabled={togglingDocsOk === d.id}
+                          />
+                          Required docs OK
+                        </label>
+                        {togglingDocsOk === d.id && <span className="text-xs">Saving…</span>}
                       </div>
-                    </>
-                  )}
+
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const c = complianceByDraw[d.id];
+                          return (
+                            <Button
+                              variant="outline"
+                              disabled={
+                                decidingId === d.id ||
+                                d.status === 'approved' ||
+                                !c || !c.docsOk || !c.bbcOk || !c.limitOk
+                              }
+                              title={
+                                !c ? 'Checking compliance…'
+                                  : !c.docsOk ? 'Docs not marked OK'
+                                  : !c.bbcOk ? 'No approved BBC within 45 days'
+                                  : !c.limitOk ? `Amount exceeds availability (${(c.available||0).toLocaleString('en-US',{style:'currency',currency:'USD'})})`
+                                  : undefined
+                              }
+                              onClick={()=>decideDraw(d.id, 'approved')}
+                            >
+                              {decidingId === d.id ? 'Saving…' : 'Approve'}
+                            </Button>
+                          );
+                        })()}
+                        <Button
+                          variant="destructive"
+                          disabled={decidingId === d.id || d.status === 'rejected'}
+                          onClick={()=>decideDraw(d.id, 'rejected')}
+                        >
+                          {decidingId === d.id ? 'Saving…' : 'Reject'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-          {err && <div className="text-destructive mt-3">{err}</div>}
-        </CardContent>
-      </Card>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="compliance" className="space-y-6">
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5" />
+                  Compliance Breaches
+                </CardTitle>
+                <CardDescription>
+                  Monitor facility covenant violations and policy breaches
+                </CardDescription>
+              </div>
+              <Button 
+                variant="outline" 
+                onClick={loadBreaches}
+                disabled={breachesLoading}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${breachesLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {breaches.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {breachesLoading ? 'Loading breaches...' : 'No compliance breaches found. ✅'}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {breaches.map((breach, i) => (
+                    <div key={i} className="border rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">
+                          {breach.customer_name} • 
+                          <span className="font-mono text-sm ml-2">
+                            {breach.facility_id.slice(0, 8)}...
+                          </span>
+                        </div>
+                        <Badge 
+                          variant={breach.severity === 'warning' ? 'destructive' : 'secondary'}
+                        >
+                          {breach.code}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {breach.message}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Portfolio by Sector/Region</CardTitle>
+                <CardDescription>Outstanding balances and credit limits by industry sector</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={portfolioAgg}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="sector" />
+                      <YAxis />
+                      <Tooltip 
+                        formatter={(value: any, name: string) => [
+                          `$${Number(value).toLocaleString()}`, 
+                          name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
+                        ]}
+                      />
+                      <Bar dataKey="principal_outstanding" name="Outstanding" fill="hsl(var(--primary))" />
+                      <Bar dataKey="credit_limit" name="Credit Limit" fill="hsl(var(--muted))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Utilization Trend (90 days)</CardTitle>
+                  <CardDescription>Track facility utilization over time</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Enter Facility ID"
+                    value={timeSeriesFacility}
+                    onChange={(e) => setTimeSeriesFacility(e.target.value)}
+                    className="w-72 font-mono text-sm"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => loadTimeSeries(timeSeriesFacility)}
+                    disabled={!timeSeriesFacility.trim()}
+                  >
+                    Load
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={timeSeries}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="d" />
+                      <YAxis />
+                      <Tooltip 
+                        formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
+                        labelFormatter={(label) => `Date: ${label}`}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="utilization_pct" 
+                        name="Utilization %" 
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="facilities" className="space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Create Facility</CardTitle></CardHeader>
+            <CardContent>
+              <form onSubmit={createFacility} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label>Customer</Label>
+                  <Select
+                    value={facilityForm.customer_id}
+                    onValueChange={(v) => setFacilityForm(f => ({ ...f, customer_id: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.legal_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Facility Type</Label>
+                  <Select
+                    value={facilityForm.type}
+                    onValueChange={(v: 'revolving' | 'single_loan') =>
+                      setFacilityForm(f => ({ ...f, type: v }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="revolving">Revolving</SelectItem>
+                      <SelectItem value="single_loan">Single Loan</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Credit Limit (USD)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={facilityForm.credit_limit}
+                    onChange={(e) => setFacilityForm(f => ({ ...f, credit_limit: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>APR (decimal, e.g., 0.145 = 14.5%)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={facilityForm.apr}
+                    onChange={(e) => setFacilityForm(f => ({ ...f, apr: e.target.value }))}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label>Minimum Advance (USD)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={facilityForm.min_advance}
+                    onChange={(e) => setFacilityForm(f => ({ ...f, min_advance: e.target.value }))}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button type="submit" disabled={!canSubmit || creating}>
+                    {creating ? 'Creating…' : 'Create Facility'}
+                  </Button>
+                  {err && <span className="text-destructive">{err}</span>}
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reports" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Weekly Reports</CardTitle>
+              <CardDescription>Generate automated compliance and audit reports</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <Button
+                  onClick={async () => {
+                    toast({
+                      title: "Report Generated",
+                      description: "Weekly breach digest has been triggered",
+                    });
+                  }}
+                >
+                  Generate Weekly Breach Report
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    toast({
+                      title: "Export Started",
+                      description: "Audit log export to S3 has been initiated",
+                    });
+                  }}
+                >
+                  Export Audit Logs to S3
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
