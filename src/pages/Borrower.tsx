@@ -5,6 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { NotificationBell } from '@/components/NotificationBell';
 import { BbcCsvUpload } from '@/components/BbcCsvUpload';
+import { Row } from '@/components/Row';
+import { MetricCard } from '@/components/MetricCard';
+import { ListCard } from '@/components/ListCard';
+import { Chip } from '@/components/Chip';
 // @ts-ignore
 import jsPDF from 'jspdf';
 // @ts-ignore
@@ -92,6 +96,9 @@ export default function BorrowerPage() {
   const tooSmall = facility ? reqAmt > 0 && reqAmt < (facility.min_advance ?? 0) : false;
   const tooLarge = available != null ? reqAmt > available : false;
   const invalidAmt = Number.isNaN(reqAmt) || reqAmt <= 0 || tooSmall || tooLarge;
+
+  // Helper function for formatting currency
+  const money = (n: number) => (Number(n || 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
   function monthBounds(yyyyMm: string): { start: string; end: string } {
     const [y, m] = yyyyMm.split('-').map(Number);
@@ -504,176 +511,156 @@ export default function BorrowerPage() {
   if (loading) return <div className="p-6">Loading borrower…</div>;
   if (err) return <div className="p-6 text-destructive">Error: {err}</div>;
 
+  // Format data for display
+  const creditLimitFmt = facility ? money(facility.credit_limit) : '$0';
+  const aprFmt = facility ? `${(facility.apr * 100).toFixed(2)}%` : '0%';
+  const principalFmt = money(principal ?? 0);
+  const availableFmt = money(available ?? 0);
+  const accruedFmt = money(accrued ?? 0);
+
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Borrower Portal</h1>
-        <div className="flex items-center gap-4">
-          <NotificationBell />
-          <Button variant="outline" onClick={logout}>Logout</Button>
+    <div className="space-y-6">
+      {/* Hero header */}
+      <div className="mt-8">
+        <div className="rounded-2xl overflow-hidden relative" style={{
+          background: 'radial-gradient(120% 120% at 0% 0%, rgba(229,9,20,0.35) 0%, rgba(229,9,20,0.05) 40%, transparent 70%)'
+        }}>
+          <div className="p-6 md:p-10">
+            <h1 className="text-2xl md:text-3xl font-extrabold">Welcome back, {customer?.legal_name || 'Customer'}</h1>
+            <p className="text-neutral-300 mt-2">Your credit line at a glance</p>
+            <div className="mt-4 flex gap-3 items-center">
+              <button 
+                className="px-4 py-2 rounded bg-[#E50914] text-white hover:opacity-90"
+                onClick={() => {
+                  // Scroll to draw request section
+                  const drawSection = document.querySelector('[data-section="draw-request"]');
+                  drawSection?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Request Funds
+              </button>
+              <button 
+                className="px-4 py-2 rounded border border-white/20 hover:bg-white/5"
+                onClick={() => {
+                  const stmtSection = document.querySelector('[data-section="statement"]');
+                  stmtSection?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Download Statement
+              </button>
+              <div className="ml-auto">
+                <NotificationBell />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>Your Company</CardTitle></CardHeader>
-        <CardContent>
-          {customer ? (
-            <div>
-              <div className="font-medium">{customer.legal_name}</div>
-              <div className="text-sm text-muted-foreground">Customer ID: {customer.id}</div>
-            </div>
-          ) : (
-            <div className="text-muted-foreground">No company assigned.</div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Row: Facility snapshot */}
+      <Row title="Facility Snapshot">
+        <MetricCard label="Credit Limit" value={creditLimitFmt} sub={`APR ${aprFmt}`} />
+        <MetricCard label="Outstanding Principal" value={principalFmt} sub="Updated in real time" />
+        <MetricCard label="Available to Draw" value={availableFmt} sub={facility ? `Min advance ${money(facility.min_advance || 0)}` : ''} />
+        <MetricCard label="Accrued Interest" value={accruedFmt} sub="Unposted" />
+      </Row>
 
-      <Card>
-        <CardHeader><CardTitle>Facility Snapshot</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {!facility ? (
-            <div className="text-muted-foreground">No facility yet.</div>
-          ) : (
-            <>
-              <div className="flex justify-between">
-                <span>Facility Type</span>
-                <span className="font-medium capitalize">{facility.type}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Credit Limit</span>
-                <span className="font-medium">
-                  {facility.credit_limit?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>APR</span>
-                <span className="font-medium">{(facility.apr * 100).toFixed(2)}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Outstanding Principal</span>
-                <span className="font-medium">
-                  {(principal ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Available to Draw</span>
-                <span className="font-medium">
-                  {(available ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Accrued Interest (unposted)</span>
-                <span className="font-medium">
-                  {(accrued ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </span>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Monthly Statement</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-end gap-3">
-            <div className="grid gap-1">
-              <label className="text-sm">Month</label>
-              <input
-                type="month"
-                value={stmtMonth}
-                onChange={(e) => setStmtMonth(e.target.value)}
-                className="border rounded px-3 py-2"
-              />
-            </div>
-            <Button variant="outline" onClick={setLastMonth}>Last Month</Button>
-            <Button onClick={downloadStatementPdf} disabled={!facility?.id || stmtLoading}>
-              {stmtLoading ? 'Preparing…' : 'Download PDF'}
-            </Button>
+      {/* Row: Recent transactions */}
+      <Row title="Recent Activity">
+        {!txs || txs.length === 0 ? (
+          <div className="min-w-[320px] snap-start card-surface p-4">
+            <div className="text-neutral-400">No transactions yet.</div>
           </div>
-          
-          <details className="mt-2">
-            <summary className="cursor-pointer text-sm underline">How is interest calculated?</summary>
-            <div className="text-xs text-muted-foreground mt-1">
+        ) : (
+          txs.slice(0, 10).map(tx => (
+            <ListCard
+              key={tx.id}
+              title={`${tx.type.toUpperCase().replace(/_/g, ' ')} • ${money(tx.amount)}`}
+              meta={new Date(tx.effective_at).toLocaleString()}
+              right={<Chip 
+                text={tx.type} 
+                tone={tx.type === 'payment' ? 'ok' : tx.type === 'advance' ? 'warn' : 'muted'} 
+              />}
+              muted={tx.memo || ''}
+            />
+          ))
+        )}
+      </Row>
+
+      {/* Row: Monthly Statement */}
+      <Row title="Monthly Statement" action={
+        <div className="flex items-center gap-2">
+          <input
+            type="month"
+            value={stmtMonth}
+            onChange={(e) => setStmtMonth(e.target.value)}
+            className="border rounded px-3 py-2 text-sm bg-white/5 border-white/10 text-white"
+          />
+          <Button variant="outline" onClick={setLastMonth} className="text-xs">Last Month</Button>
+        </div>
+      }>
+        <div data-section="statement" className="min-w-[320px] snap-start card-surface p-4">
+          <button 
+            onClick={downloadStatementPdf} 
+            disabled={!facility?.id || stmtLoading}
+            className="w-full px-4 py-3 rounded bg-[#E50914] text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {stmtLoading ? 'Preparing…' : 'Download PDF'}
+          </button>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm text-neutral-300">How is interest calculated?</summary>
+            <div className="text-xs text-neutral-400 mt-2">
               Daily accrual: principal × APR / 365 × days between cashflow events. Posting resets accrual.
             </div>
           </details>
-        </CardContent>
-      </Card>
+        </div>
+      </Row>
 
-      <Card>
-        <CardHeader><CardTitle>Transactions</CardTitle></CardHeader>
-        <CardContent>
-          {(!txs || txs.length === 0) ? (
-            <div className="text-muted-foreground">No transactions yet.</div>
-          ) : (
-            <div className="grid gap-3">
-              {txs.map(t => (
-                <div key={t.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
-                  <div className="space-y-0.5">
-                    <div className="font-medium capitalize">{t.type.replace(/_/g,' ')}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(t.effective_at).toLocaleString()}
-                      {t.memo ? ` • ${t.memo}` : ''}
-                    </div>
-                  </div>
-                  <div className="font-medium">
-                    {t.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      {/* Row: Request Funds */}
       {facility && (
-        <Card>
-          <CardHeader><CardTitle>Request Funds</CardTitle></CardHeader>
-          <CardContent>
-            <form onSubmit={submitDraw} className="grid gap-3">
-              <div className="grid gap-1">
-                <label className="text-sm">Amount (USD)</label>
+        <Row title="Request Funds">
+          <div data-section="draw-request" className="min-w-[400px] snap-start card-surface p-4">
+            <form onSubmit={submitDraw} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-sm text-neutral-300">Amount (USD)</label>
                 <input
                   type="number" min="0" step="0.01"
                   value={drawAmount}
                   onChange={(e) => setDrawAmount(e.target.value)}
-                  className="border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2 bg-white/5 border-white/10 text-white"
                 />
                 {facility?.min_advance != null && reqAmt > 0 && reqAmt < facility.min_advance && (
-                  <div className="text-xs text-destructive">
-                    Below minimum advance of {facility.min_advance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  <div className="text-xs text-red-400">
+                    Below minimum advance of {money(facility.min_advance)}
                   </div>
                 )}
                 {available != null && reqAmt > available && (
-                  <div className="text-xs text-destructive">
-                    Exceeds available to draw ({available.toLocaleString('en-US', { style: 'currency', currency: 'USD' })})
+                  <div className="text-xs text-red-400">
+                    Exceeds available to draw ({money(available)})
                   </div>
                 )}
               </div>
 
-              <div className="grid gap-1">
-                <label className="text-sm">Purpose (optional)</label>
+              <div className="space-y-1">
+                <label className="text-sm text-neutral-300">Purpose (optional)</label>
                 <input
                   type="text"
                   value={drawMemo}
                   onChange={(e) => setDrawMemo(e.target.value)}
-                  className="border rounded px-3 py-2"
+                  className="w-full border rounded px-3 py-2 bg-white/5 border-white/10 text-white"
                   placeholder="Working capital, equipment purchase, etc."
                 />
               </div>
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={postingDraw || !facility?.id || invalidAmt}
-                  className="px-4 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50"
-                >
-                  {postingDraw ? 'Submitting…' : 'Submit Request'}
-                </button>
-              </div>
+              <button
+                type="submit"
+                disabled={postingDraw || !facility?.id || invalidAmt}
+                className="w-full px-4 py-2 rounded bg-[#E50914] text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {postingDraw ? 'Submitting…' : 'Submit Request'}
+              </button>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </Row>
       )}
 
       <Card>
@@ -740,32 +727,28 @@ export default function BorrowerPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Recent Requests</CardTitle></CardHeader>
-        <CardContent>
-          {(!draws || draws.length === 0) ? (
-            <div className="text-muted-foreground">No draw requests yet.</div>
-          ) : (
-            <div className="grid gap-3">
-              {draws.map(d => (
-                <div key={d.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
-                  <div className="space-y-0.5">
-                    <div className="font-medium">
-                      {d.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(d.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="text-xs uppercase tracking-wide font-medium">
-                    {d.status}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Row: Draw requests */}
+      <Row title="Draw Requests" action={
+        <button className="text-sm text-neutral-300 hover:text-white">View all</button>
+      }>
+        {!draws || draws.length === 0 ? (
+          <div className="min-w-[320px] snap-start card-surface p-4">
+            <div className="text-neutral-400">No draw requests yet.</div>
+          </div>
+        ) : (
+          draws.map(d => (
+            <ListCard
+              key={d.id}
+              title={`Request ${money(d.amount)}`}
+              meta={new Date(d.created_at).toLocaleString()}
+              right={<Chip 
+                text={d.status.replace('_', ' ')} 
+                tone={d.status === 'approved' ? 'ok' : d.status === 'rejected' ? 'bad' : 'warn'} 
+              />}
+            />
+          ))
+        )}
+      </Row>
 
       <Card>
         <CardHeader><CardTitle>Borrowing Base Certificate (BBC)</CardTitle></CardHeader>

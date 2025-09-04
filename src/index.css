@@ -2,14 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Netflix-style theme tokens */
+:root {
+  --bg: 17 17 17;         /* #111 */
+  --panel: 24 24 24;      /* #181818 */
+  --muted: 160 160 160;   /* #A0A0A0 */
+  --text: 255 255 255;    /* #fff */
+  --accent: 229 9 20;     /* Netflix red #E50914 */
+  --accent-2: 255 255 255;/* white */
+  --green: 16 185 129;    /* success chip */
+  --amber: 245 158 11;    /* warning chip */
+  --red: 239 68 68;       /* destructive chip */
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+  /* Original shadcn tokens for compatibility */
+  --background: 17 17 17;
+  --foreground: 255 255 255;
 
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
@@ -92,6 +99,33 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+}
+
+/* Global dark surface */
+body { 
+  background-color: rgb(var(--bg)); 
+  color: rgb(var(--text)); 
+}
+
+/* Subtle card gradient */
+.card-surface {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.00) 100%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 1rem;
+}
+
+/* Custom scrollbar for Netflix rows */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thumb-neutral-700::-webkit-scrollbar-thumb {
+  background-color: rgb(64 64 64);
+  border-radius: 0.25rem;
+}
+
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background-color: transparent;
 }
 
 @layer base {
