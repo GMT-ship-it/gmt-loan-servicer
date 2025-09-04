@@ -154,13 +154,6 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "borrowing_base_reports_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal_secure"
-            referencedColumns: ["facility_id"]
-          },
         ]
       }
       customers: {
@@ -272,13 +265,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "facilities"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "draw_requests_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal_secure"
-            referencedColumns: ["facility_id"]
           },
         ]
       }
@@ -402,13 +388,6 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal_secure"
-            referencedColumns: ["facility_id"]
-          },
         ]
       }
     }
@@ -426,21 +405,7 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "transactions_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facility_principal_secure"
-            referencedColumns: ["facility_id"]
-          },
         ]
-      }
-      facility_principal_secure: {
-        Row: {
-          facility_id: string | null
-          principal_outstanding: number | null
-        }
-        Relationships: []
       }
     }
     Functions: {
@@ -453,7 +418,7 @@ export type Database = {
         Returns: number
       }
       get_facility_principal: {
-        Args: { p_facility_id: string }
+        Args: { p_facility_id?: string }
         Returns: {
           facility_id: string
           principal_outstanding: number

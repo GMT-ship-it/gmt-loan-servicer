@@ -131,17 +131,16 @@ export default function BorrowerPage() {
         if (fErr) { setErr(fErr.message); setLoading(false); return; }
         setFacility(fac || null);
 
-        // 2) Load principal from the view (RLS applies through underlying tables)
+        // 2) Load principal using the secure function
         if (fac?.id) {
-          const { data: princRow, error: prErr } = await supabase
-            .from('facility_principal')
-            .select('principal_outstanding')
-            .eq('facility_id', fac.id)
-            .single();
+          const { data: princData, error: prErr } = await supabase
+            .rpc('get_facility_principal', { p_facility_id: fac.id });
 
-          if (prErr && prErr.code !== 'PGRST116') { // PGRST116 = no rows (treat as 0)
+          if (prErr) {
             setErr(prErr.message);
           } else {
+            // The function returns an array, get the first result
+            const princRow = princData?.[0];
             setPrincipal(princRow?.principal_outstanding ?? 0);
           }
 
