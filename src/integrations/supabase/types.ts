@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       borrowing_base_items: {
         Row: {
           amount: number
@@ -120,6 +153,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "facilities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borrowing_base_reports_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal_secure"
+            referencedColumns: ["facility_id"]
           },
         ]
       }
@@ -232,6 +272,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "facilities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draw_requests_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal_secure"
+            referencedColumns: ["facility_id"]
           },
         ]
       }
@@ -355,6 +402,13 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal_secure"
+            referencedColumns: ["facility_id"]
+          },
         ]
       }
     }
@@ -372,7 +426,21 @@ export type Database = {
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transactions_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: false
+            referencedRelation: "facility_principal_secure"
+            referencedColumns: ["facility_id"]
+          },
         ]
+      }
+      facility_principal_secure: {
+        Row: {
+          facility_id: string | null
+          principal_outstanding: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {
@@ -383,6 +451,13 @@ export type Database = {
       facility_available_to_draw: {
         Args: { p_facility: string }
         Returns: number
+      }
+      get_facility_principal: {
+        Args: { p_facility_id: string }
+        Returns: {
+          facility_id: string
+          principal_outstanding: number
+        }[]
       }
       is_borrower: {
         Args: { uid: string }
