@@ -392,21 +392,7 @@ export type Database = {
       }
     }
     Views: {
-      facility_principal: {
-        Row: {
-          facility_id: string | null
-          principal_outstanding: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transactions_facility_id_fkey"
-            columns: ["facility_id"]
-            isOneToOne: false
-            referencedRelation: "facilities"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       facility_accrued_interest: {
