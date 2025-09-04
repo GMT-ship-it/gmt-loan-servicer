@@ -6,13 +6,7 @@
 :root {
   --bg: 17 17 17;         /* #111 */
   --panel: 24 24 24;      /* #181818 */
-  --muted: 160 160 160;   /* #A0A0A0 */
   --text: 255 255 255;    /* #fff */
-  --accent: 229 9 20;     /* Netflix red #E50914 */
-  --accent-2: 255 255 255;/* white */
-  --green: 16 185 129;    /* success chip */
-  --amber: 245 158 11;    /* warning chip */
-  --red: 239 68 68;       /* destructive chip */
 
   /* Original shadcn tokens for compatibility */
   --background: 17 17 17;
@@ -99,9 +93,9 @@ body {
   color: rgb(var(--text)); 
 }
 
-/* Subtle card gradient */
+/* Subtle glassy card */
 .card-surface {
-  background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.00) 100%);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.015) 100%);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 1rem;
 }
@@ -111,9 +105,9 @@ body {
   scrollbar-width: thin;
 }
 
-.scrollbar-thumb-neutral-700::-webkit-scrollbar-thumb {
-  background-color: rgb(64 64 64);
-  border-radius: 0.25rem;
+.scrollbar-thumb-neutral-700::-webkit-scrollbar-thumb { 
+  background: #404040; 
+  border-radius: 8px; 
 }
 
 .scrollbar-track-transparent::-webkit-scrollbar-track {

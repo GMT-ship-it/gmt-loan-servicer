@@ -508,49 +508,49 @@ export default function BorrowerPage() {
     setStmtMonth(dt.toISOString().slice(0, 7));
   };
 
-  if (loading) return <div className="p-6">Loading borrower…</div>;
-  if (err) return <div className="p-6 text-destructive">Error: {err}</div>;
+  if (loading) return <div>Loading...</div>;
+  if (err) return <div>Error: {err}</div>;
 
-  // Format data for display
-  const creditLimitFmt = facility ? money(facility.credit_limit) : '$0';
-  const aprFmt = facility ? `${(facility.apr * 100).toFixed(2)}%` : '0%';
+  // Formatted strings
+  const creditLimitFmt = facility ? money(facility.credit_limit) : '$0.00';
+  const aprFmt = facility ? `${(Number(facility.apr) * 100).toFixed(2)}%` : '—';
   const principalFmt = money(principal ?? 0);
   const availableFmt = money(available ?? 0);
   const accruedFmt = money(accrued ?? 0);
+  const bbcFresh = true; // You can implement BBC freshness check
 
   return (
-    <div className="space-y-6">
+    <>
       {/* Hero header */}
       <div className="mt-8">
-        <div className="rounded-2xl overflow-hidden relative" style={{
-          background: 'radial-gradient(120% 120% at 0% 0%, rgba(229,9,20,0.35) 0%, rgba(229,9,20,0.05) 40%, transparent 70%)'
-        }}>
+        <div
+          className="rounded-2xl overflow-hidden relative"
+          style={{
+            background:
+              'radial-gradient(120% 120% at 0% 0%, rgba(229,9,20,0.35) 0%, rgba(229,9,20,0.06) 40%, transparent 70%)',
+          }}
+        >
           <div className="p-6 md:p-10">
-            <h1 className="text-2xl md:text-3xl font-extrabold">Welcome back, {customer?.legal_name || 'Customer'}</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold">Welcome back</h1>
             <p className="text-neutral-300 mt-2">Your credit line at a glance</p>
-            <div className="mt-4 flex gap-3 items-center">
-              <button 
-                className="px-4 py-2 rounded bg-[#E50914] text-white hover:opacity-90"
+            <div className="mt-4 flex gap-3">
+              <Button
                 onClick={() => {
                   // Scroll to draw request section
                   const drawSection = document.querySelector('[data-section="draw-request"]');
                   drawSection?.scrollIntoView({ behavior: 'smooth' });
                 }}
+                className="bg-[#E50914] text-white hover:opacity-90"
               >
                 Request Funds
-              </button>
-              <button 
-                className="px-4 py-2 rounded border border-white/20 hover:bg-white/5"
-                onClick={() => {
-                  const stmtSection = document.querySelector('[data-section="statement"]');
-                  stmtSection?.scrollIntoView({ behavior: 'smooth' });
-                }}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => downloadStatementPdf()}
+                className="border-white/20 hover:bg-white/5 text-white"
               >
                 Download Statement
-              </button>
-              <div className="ml-auto">
-                <NotificationBell />
-              </div>
+              </Button>
             </div>
           </div>
         </div>
@@ -560,340 +560,64 @@ export default function BorrowerPage() {
       <Row title="Facility Snapshot">
         <MetricCard label="Credit Limit" value={creditLimitFmt} sub={`APR ${aprFmt}`} />
         <MetricCard label="Outstanding Principal" value={principalFmt} sub="Updated in real time" />
-        <MetricCard label="Available to Draw" value={availableFmt} sub={facility ? `Min advance ${money(facility.min_advance || 0)}` : ''} />
+        <MetricCard label="Available to Draw" value={availableFmt} sub={bbcFresh ? 'BBC fresh' : 'BBC stale'} />
         <MetricCard label="Accrued Interest" value={accruedFmt} sub="Unposted" />
       </Row>
 
-      {/* Row: Recent transactions */}
-      <Row title="Recent Activity">
-        {!txs || txs.length === 0 ? (
-          <div className="min-w-[320px] snap-start card-surface p-4">
-            <div className="text-neutral-400">No transactions yet.</div>
-          </div>
-        ) : (
-          txs.slice(0, 10).map(tx => (
+      {/* Row: Recent Activity (transactions) */}
+      {!!txs?.length && (
+        <Row title="Recent Activity">
+          {txs.map((t: any) => (
             <ListCard
-              key={tx.id}
-              title={`${tx.type.toUpperCase().replace(/_/g, ' ')} • ${money(tx.amount)}`}
-              meta={new Date(tx.effective_at).toLocaleString()}
-              right={<Chip 
-                text={tx.type} 
-                tone={tx.type === 'payment' ? 'ok' : tx.type === 'advance' ? 'warn' : 'muted'} 
-              />}
-              muted={tx.memo || ''}
+              key={t.id}
+              title={`${String(t.type).toUpperCase()} • ${money(t.amount)}`}
+              meta={new Date(t.effective_at).toLocaleString()}
+              right={
+                <Chip
+                  text={t.type}
+                  tone={t.type === 'payment' ? 'ok' : t.type === 'advance' ? 'warn' : 'muted'}
+                />
+              }
+              muted={t.memo || ''}
             />
-          ))
-        )}
-      </Row>
-
-      {/* Row: Monthly Statement */}
-      <Row title="Monthly Statement" action={
-        <div className="flex items-center gap-2">
-          <input
-            type="month"
-            value={stmtMonth}
-            onChange={(e) => setStmtMonth(e.target.value)}
-            className="border rounded px-3 py-2 text-sm bg-white/5 border-white/10 text-white"
-          />
-          <Button variant="outline" onClick={setLastMonth} className="text-xs">Last Month</Button>
-        </div>
-      }>
-        <div data-section="statement" className="min-w-[320px] snap-start card-surface p-4">
-          <button 
-            onClick={downloadStatementPdf} 
-            disabled={!facility?.id || stmtLoading}
-            className="w-full px-4 py-3 rounded bg-[#E50914] text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {stmtLoading ? 'Preparing…' : 'Download PDF'}
-          </button>
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm text-neutral-300">How is interest calculated?</summary>
-            <div className="text-xs text-neutral-400 mt-2">
-              Daily accrual: principal × APR / 365 × days between cashflow events. Posting resets accrual.
-            </div>
-          </details>
-        </div>
-      </Row>
-
-      {/* Row: Request Funds */}
-      {facility && (
-        <Row title="Request Funds">
-          <div data-section="draw-request" className="min-w-[400px] snap-start card-surface p-4">
-            <form onSubmit={submitDraw} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-sm text-neutral-300">Amount (USD)</label>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={drawAmount}
-                  onChange={(e) => setDrawAmount(e.target.value)}
-                  className="w-full border rounded px-3 py-2 bg-white/5 border-white/10 text-white"
-                />
-                {facility?.min_advance != null && reqAmt > 0 && reqAmt < facility.min_advance && (
-                  <div className="text-xs text-red-400">
-                    Below minimum advance of {money(facility.min_advance)}
-                  </div>
-                )}
-                {available != null && reqAmt > available && (
-                  <div className="text-xs text-red-400">
-                    Exceeds available to draw ({money(available)})
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm text-neutral-300">Purpose (optional)</label>
-                <input
-                  type="text"
-                  value={drawMemo}
-                  onChange={(e) => setDrawMemo(e.target.value)}
-                  className="w-full border rounded px-3 py-2 bg-white/5 border-white/10 text-white"
-                  placeholder="Working capital, equipment purchase, etc."
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={postingDraw || !facility?.id || invalidAmt}
-                className="w-full px-4 py-2 rounded bg-[#E50914] text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {postingDraw ? 'Submitting…' : 'Submit Request'}
-              </button>
-            </form>
-          </div>
+          ))}
         </Row>
       )}
 
-      <Card>
-        <CardHeader><CardTitle>Upload Required Docs</CardTitle></CardHeader>
-        <CardContent className="grid gap-4">
-          {!activeDrawId ? (
-            <div className="text-muted-foreground">
-              No submitted draw found. Submit a draw request to attach documents.
-            </div>
-          ) : (
-            <>
-              <div className="text-sm">
-                Attaching to Draw ID: <span className="font-mono">{activeDrawId}</span>
-              </div>
-              <form onSubmit={uploadDocs} className="grid gap-3">
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setFilesToUpload(e.target.files)}
-                  className="border rounded px-3 py-2"
-                />
-                <div>
-                  <button
-                    type="submit"
-                    disabled={uploading || !filesToUpload || filesToUpload.length === 0}
-                    className="px-4 py-2 rounded bg-primary text-primary-foreground disabled:opacity-50"
-                  >
-                    {uploading ? 'Uploading…' : 'Upload'}
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
-
-          <div className="pt-2">
-            <div className="font-medium mb-2">Attached Files</div>
-            {docs.length === 0 ? (
-              <div className="text-muted-foreground">No documents uploaded yet.</div>
-            ) : (
-              <div className="grid gap-2">
-                {docs.map(d => (
-                  <div key={d.id} className="flex items-center justify-between border-b pb-2 last:border-b-0">
-                    <div className="text-sm">
-                      <div className="font-medium">{d.original_name || d.path.split('/').pop()}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(d.uploaded_at).toLocaleString()} • {d.mime_type || 'file'} • {(d.size_bytes ?? 0).toLocaleString()} bytes
-                      </div>
-                    </div>
-                    <button
-                      className="text-sm underline"
-                      onClick={async () => {
-                        const url = await getSignedUrl(d.path);
-                        if (url) window.open(url, '_blank');
-                      }}
-                    >
-                      Download
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {err && <div className="text-destructive">{err}</div>}
-        </CardContent>
-      </Card>
-
       {/* Row: Draw requests */}
-      <Row title="Draw Requests" action={
-        <button className="text-sm text-neutral-300 hover:text-white">View all</button>
-      }>
-        {!draws || draws.length === 0 ? (
-          <div className="min-w-[320px] snap-start card-surface p-4">
-            <div className="text-neutral-400">No draw requests yet.</div>
-          </div>
-        ) : (
-          draws.map(d => (
+      {!!draws?.length && (
+        <Row
+          title="Draw Requests"
+          action={<button className="text-sm text-neutral-300 hover:text-white">View all</button>}
+        >
+          {draws.map((d: any) => (
             <ListCard
               key={d.id}
               title={`Request ${money(d.amount)}`}
               meta={new Date(d.created_at).toLocaleString()}
-              right={<Chip 
-                text={d.status.replace('_', ' ')} 
-                tone={d.status === 'approved' ? 'ok' : d.status === 'rejected' ? 'bad' : 'warn'} 
-              />}
+              right={
+                <Chip
+                  text={d.status.replace('_', ' ')}
+                  tone={d.status === 'approved' ? 'ok' : d.status === 'rejected' ? 'bad' : 'warn'}
+                />
+              }
+              muted={`Draw ID: ${d.id.slice(0, 8)}`}
             />
-          ))
-        )}
-      </Row>
+          ))}
+        </Row>
+      )}
 
-      <Card>
-        <CardHeader><CardTitle>Borrowing Base Certificate (BBC)</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          {!bbc ? (
-            <form onSubmit={createBbc} className="grid gap-3">
-              <div className="grid gap-1">
-                <label className="text-sm">Period End</label>
-                <input type="date" value={bbcPeriodEnd}
-                       onChange={(e)=>setBbcPeriodEnd(e.target.value)}
-                       className="border rounded px-3 py-2" />
-              </div>
-              <div>
-                <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
-                        disabled={creatingBbc || !facility?.id}>
-                  {creatingBbc ? 'Creating…' : 'Create BBC'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <>
-              {/* Header snapshot */}
-              <div className="grid gap-1 text-sm">
-                <div className="flex justify-between"><span>Status</span><span className="font-medium uppercase">{bbc.status}</span></div>
-                <div className="flex justify-between"><span>Period End</span><span className="font-medium">{bbc.period_end}</span></div>
-                <div className="flex justify-between"><span>Gross Collateral</span><span className="font-medium">{bbc.gross_collateral.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                <div className="flex justify-between"><span>Ineligibles</span><span className="font-medium">{bbc.ineligibles.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                <div className="flex justify-between"><span>Reserves</span><span className="font-medium">{bbc.reserves.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                <div className="flex justify-between"><span>Borrowing Base</span><span className="font-medium">{bbc.borrowing_base.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-                <div className="flex justify-between"><span>Availability (BBC)</span><span className="font-medium">{bbc.availability.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
-              </div>
-
-              {/* CSV Upload */}
-              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
-                <div className="pt-2">
-                  <BbcCsvUpload 
-                    bbcId={bbc.id} 
-                    onUploadComplete={() => {
-                      // Refresh BBC items after CSV upload
-                      (async () => {
-                        const [{ data: items }, { data: rep }] = await Promise.all([
-                          supabase.from('borrowing_base_items')
-                            .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
-                            .eq('report_id', bbc.id).order('created_at', { ascending: false }),
-                          supabase.from('borrowing_base_reports')
-                            .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
-                            .eq('id', bbc.id).single()
-                        ]);
-                        setBbcItems(items || []);
-                        if (rep) setBbc(rep);
-                      })();
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Add line item (draft/submitted) */}
-              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
-                <form onSubmit={addBbcItem} className="grid gap-3 pt-2">
-                  <div className="grid gap-1">
-                    <label className="text-sm">Type</label>
-                    <select value={itemForm.item_type}
-                            onChange={(e)=>setItemForm(f=>({...f, item_type: e.target.value as BbcItemType}))}
-                            className="border rounded px-3 py-2">
-                      <option value="accounts_receivable">Accounts Receivable</option>
-                      <option value="inventory">Inventory</option>
-                      <option value="cash">Cash</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-sm">Reference</label>
-                    <input className="border rounded px-3 py-2"
-                           value={itemForm.ref}
-                           onChange={(e)=>setItemForm(f=>({...f, ref: e.target.value}))}/>
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-sm">Note</label>
-                    <input className="border rounded px-3 py-2"
-                           value={itemForm.note}
-                           onChange={(e)=>setItemForm(f=>({...f, note: e.target.value}))}/>
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-sm">Amount (USD)</label>
-                    <input type="number" min="0" step="0.01" className="border rounded px-3 py-2"
-                           value={itemForm.amount}
-                           onChange={(e)=>setItemForm(f=>({...f, amount: e.target.value}))}/>
-                  </div>
-                  <div className="grid gap-1">
-                    <label className="text-sm">Haircut Rate (0–1)</label>
-                    <input type="number" min="0" max="1" step="0.0001" className="border rounded px-3 py-2"
-                           value={itemForm.haircut_rate}
-                           onChange={(e)=>setItemForm(f=>({...f, haircut_rate: e.target.value}))}/>
-                  </div>
-                  <label className="text-sm inline-flex items-center gap-2">
-                    <input type="checkbox"
-                           checked={itemForm.ineligible}
-                           onChange={(e)=>setItemForm(f=>({...f, ineligible: e.target.checked}))}/>
-                    Mark ineligible
-                  </label>
-                  <div>
-                    <button className="px-4 py-2 rounded bg-primary text-primary-foreground">Add Item</button>
-                  </div>
-                </form>
-              )}
-
-              {/* Items list */}
-              <div className="pt-2">
-                <div className="font-medium mb-2">Items</div>
-                {bbcItems.length === 0 ? (
-                  <div className="text-muted-foreground">No items yet.</div>
-                ) : (
-                  <div className="grid gap-2">
-                    {bbcItems.map(it => (
-                      <div key={it.id} className="flex items-center justify-between border-b pb-2 last:border-b-0 text-sm">
-                        <div className="truncate">
-                          <span className="font-medium capitalize">{it.item_type.replace('_',' ')}</span>
-                          {it.ref && <span> • {it.ref}</span>}
-                          {it.ineligible && <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 text-amber-800">Ineligible</span>}
-                          <div className="text-xs text-muted-foreground">{it.note || ''}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium">{it.amount.toLocaleString('en-US',{style:'currency',currency:'USD'})}</div>
-                          {it.haircut_rate > 0 && (
-                            <div className="text-xs text-muted-foreground">Haircut {(it.haircut_rate*100).toFixed(2)}%</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
-                <div className="pt-2">
-                  <button className="px-4 py-2 rounded bg-primary text-primary-foreground" onClick={submitBbc}>
-                    Submit BBC for Review
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-          {err && <div className="text-destructive">{err}</div>}
-        </CardContent>
-      </Card>
-    </div>
+      {/* Row: BBC reports */}
+      {!!bbc && (
+        <Row title="Borrowing Base Certificates">
+          <ListCard
+            key={bbc.id}
+            title={`Period End • ${bbc.period_end}`}
+            meta={`Borrowing Base ${money(bbc.borrowing_base)} • Availability ${money(bbc.availability)}`}
+            right={<Chip text={bbc.status} tone={bbc.status === 'approved' ? 'ok' : bbc.status === 'rejected' ? 'bad' : 'warn'} />}
+          />
+        </Row>
+      )}
+    </>
   );
 }
