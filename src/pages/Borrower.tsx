@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { NotificationBell } from '@/components/NotificationBell';
+import { BbcCsvUpload } from '@/components/BbcCsvUpload';
 // @ts-ignore
 import jsPDF from 'jspdf';
 // @ts-ignore
@@ -506,7 +508,10 @@ export default function BorrowerPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Borrower Portal</h1>
-        <Button variant="outline" onClick={logout}>Logout</Button>
+        <div className="flex items-center gap-4">
+          <NotificationBell />
+          <Button variant="outline" onClick={logout}>Logout</Button>
+        </div>
       </div>
 
       <Card>
@@ -766,20 +771,36 @@ export default function BorrowerPage() {
         <CardHeader><CardTitle>Borrowing Base Certificate (BBC)</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {!bbc ? (
-            <form onSubmit={createBbc} className="grid gap-3">
-              <div className="grid gap-1">
-                <label className="text-sm">Period End</label>
-                <input type="date" value={bbcPeriodEnd}
-                       onChange={(e)=>setBbcPeriodEnd(e.target.value)}
-                       className="border rounded px-3 py-2" />
+            <>
+              <BbcCsvUpload 
+                facilityId={facility?.id || ''} 
+                onSuccess={(data) => {
+                  setBbc(data.report);
+                  setBbcItems(data.items);
+                  setErr(null);
+                }}
+                onError={(error) => setErr(error)}
+              />
+              
+              <div className="text-center text-muted-foreground my-4">
+                or create manually
               </div>
-              <div>
-                <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
-                        disabled={creatingBbc || !facility?.id}>
-                  {creatingBbc ? 'Creating…' : 'Create BBC'}
-                </button>
-              </div>
-            </form>
+              
+              <form onSubmit={createBbc} className="grid gap-3">
+                <div className="grid gap-1">
+                  <label className="text-sm">Period End</label>
+                  <input type="date" value={bbcPeriodEnd}
+                         onChange={(e)=>setBbcPeriodEnd(e.target.value)}
+                         className="border rounded px-3 py-2" />
+                </div>
+                <div>
+                  <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
+                          disabled={creatingBbc || !facility?.id}>
+                    {creatingBbc ? 'Creating…' : 'Create BBC'}
+                  </button>
+                </div>
+              </form>
+            </>
           ) : (
             <>
               {/* Header snapshot */}
