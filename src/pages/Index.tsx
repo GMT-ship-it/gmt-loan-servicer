@@ -8,8 +8,11 @@ const Index = () => {
     <div className="min-h-screen relative overflow-hidden">
       {/* Background Image */}
       <div 
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: `url(/lovable-uploads/d8768789-f0de-403d-8c1d-269017e209ac.png)` }}
+        className="absolute inset-0 bg-center bg-no-repeat"
+        style={{ 
+          backgroundImage: `url(/lovable-uploads/d8768789-f0de-403d-8c1d-269017e209ac.png)`,
+          backgroundSize: '100% 100%'
+        }}
       />
       
       {/* Dark overlay for text readability */}
