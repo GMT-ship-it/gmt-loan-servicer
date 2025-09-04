@@ -771,36 +771,20 @@ export default function BorrowerPage() {
         <CardHeader><CardTitle>Borrowing Base Certificate (BBC)</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           {!bbc ? (
-            <>
-              <BbcCsvUpload 
-                facilityId={facility?.id || ''} 
-                onSuccess={(data) => {
-                  setBbc(data.report);
-                  setBbcItems(data.items);
-                  setErr(null);
-                }}
-                onError={(error) => setErr(error)}
-              />
-              
-              <div className="text-center text-muted-foreground my-4">
-                or create manually
+            <form onSubmit={createBbc} className="grid gap-3">
+              <div className="grid gap-1">
+                <label className="text-sm">Period End</label>
+                <input type="date" value={bbcPeriodEnd}
+                       onChange={(e)=>setBbcPeriodEnd(e.target.value)}
+                       className="border rounded px-3 py-2" />
               </div>
-              
-              <form onSubmit={createBbc} className="grid gap-3">
-                <div className="grid gap-1">
-                  <label className="text-sm">Period End</label>
-                  <input type="date" value={bbcPeriodEnd}
-                         onChange={(e)=>setBbcPeriodEnd(e.target.value)}
-                         className="border rounded px-3 py-2" />
-                </div>
-                <div>
-                  <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
-                          disabled={creatingBbc || !facility?.id}>
-                    {creatingBbc ? 'Creating…' : 'Create BBC'}
-                  </button>
-                </div>
-              </form>
-            </>
+              <div>
+                <button className="px-4 py-2 rounded bg-primary text-primary-foreground"
+                        disabled={creatingBbc || !facility?.id}>
+                  {creatingBbc ? 'Creating…' : 'Create BBC'}
+                </button>
+              </div>
+            </form>
           ) : (
             <>
               {/* Header snapshot */}
@@ -813,6 +797,30 @@ export default function BorrowerPage() {
                 <div className="flex justify-between"><span>Borrowing Base</span><span className="font-medium">{bbc.borrowing_base.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
                 <div className="flex justify-between"><span>Availability (BBC)</span><span className="font-medium">{bbc.availability.toLocaleString('en-US',{style:'currency',currency:'USD'})}</span></div>
               </div>
+
+              {/* CSV Upload */}
+              {(bbc.status === 'draft' || bbc.status === 'submitted') && (
+                <div className="pt-2">
+                  <BbcCsvUpload 
+                    bbcId={bbc.id} 
+                    onUploadComplete={() => {
+                      // Refresh BBC items after CSV upload
+                      (async () => {
+                        const [{ data: items }, { data: rep }] = await Promise.all([
+                          supabase.from('borrowing_base_items')
+                            .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+                            .eq('report_id', bbc.id).order('created_at', { ascending: false }),
+                          supabase.from('borrowing_base_reports')
+                            .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+                            .eq('id', bbc.id).single()
+                        ]);
+                        setBbcItems(items || []);
+                        if (rep) setBbc(rep);
+                      })();
+                    }}
+                  />
+                </div>
+              )}
 
               {/* Add line item (draft/submitted) */}
               {(bbc.status === 'draft' || bbc.status === 'submitted') && (
