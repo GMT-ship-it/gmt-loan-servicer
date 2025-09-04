@@ -720,44 +720,48 @@ export default function AdminPage() {
       {/* Analytics (optional charts already in your file) — wrap them in card-surface or reuse rows */}
       <section className="mt-8">
         <Row title="Analytics">
-          <Card className="min-w-[500px] card-surface">
-            <CardHeader>
-              <CardTitle>Portfolio by Sector/Region</CardTitle>
-              <CardDescription>Outstanding balances and credit limits by industry sector</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={portfolioAgg}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="sector" />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value: any, name: string) => [
-                        `$${Number(value).toLocaleString()}`, 
-                        name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
-                      ]}
-                    />
-                    <Bar dataKey="principal_outstanding" name="Outstanding" fill="hsl(var(--primary))" />
-                    <Bar dataKey="credit_limit" name="Credit Limit" fill="hsl(var(--muted))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="min-w-[500px] card-surface p-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white">Portfolio by Sector/Region</h3>
+              <p className="text-sm text-neutral-300">Outstanding balances and credit limits by industry sector</p>
+            </div>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={portfolioAgg}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis dataKey="sector" stroke="#ffffff" />
+                  <YAxis stroke="#ffffff" />
+                  <Tooltip 
+                    formatter={(value: any, name: string) => [
+                      `$${Number(value).toLocaleString()}`, 
+                      name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
+                    ]}
+                    contentStyle={{
+                      backgroundColor: 'rgba(0,0,0,0.9)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '8px',
+                      color: '#ffffff'
+                    }}
+                  />
+                  <Bar dataKey="principal_outstanding" name="Outstanding" fill="#ffffff" />
+                  <Bar dataKey="credit_limit" name="Credit Limit" fill="rgba(255,255,255,0.4)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-          <Card className="min-w-[500px] card-surface">
-            <CardHeader className="flex items-center justify-between">
+          <div className="min-w-[500px] card-surface p-6">
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <CardTitle>Utilization Trend (90 days)</CardTitle>
-                <CardDescription>Track facility utilization over time</CardDescription>
+                <h3 className="text-lg font-semibold text-white">Utilization Trend (90 days)</h3>
+                <p className="text-sm text-neutral-300">Track facility utilization over time</p>
               </div>
               <div className="flex items-center gap-2">
                 <Input
                   placeholder="Enter Facility ID"
                   value={timeSeriesFacility}
                   onChange={(e) => setTimeSeriesFacility(e.target.value)}
-                  className="w-72 font-mono text-sm"
+                  className="w-72 font-mono text-sm bg-white/5 border-white/20 text-white placeholder:text-neutral-400"
                 />
                 <Button 
                   variant="outline" 
@@ -768,30 +772,34 @@ export default function AdminPage() {
                   Load
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={timeSeries}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="d" />
-                    <YAxis />
-                    <Tooltip 
-                      formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
-                      labelFormatter={(label) => `Date: ${label}`}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="utilization_pct" 
-                      name="Utilization %" 
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={timeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis dataKey="d" stroke="#ffffff" />
+                  <YAxis stroke="#ffffff" />
+                  <Tooltip 
+                    formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
+                    labelFormatter={(label) => `Date: ${label}`}
+                    contentStyle={{
+                      backgroundColor: 'rgba(0,0,0,0.9)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '8px',
+                      color: '#ffffff'
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="utilization_pct" 
+                    name="Utilization %" 
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </Row>
 
         {/* Compliance Breaches */}
