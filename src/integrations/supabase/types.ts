@@ -403,6 +403,10 @@ export type Database = {
         Args: { p_facility: string }
         Returns: number
       }
+      facility_has_recent_approved_bbc: {
+        Args: { p_days?: number; p_facility: string }
+        Returns: boolean
+      }
       get_facility_principal: {
         Args: { p_facility_id?: string }
         Returns: {
