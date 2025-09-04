@@ -162,6 +162,8 @@ export type Database = {
           created_at: string
           id: string
           legal_name: string
+          region: string | null
+          sector: Database["public"]["Enums"]["industry_sector"] | null
           tax_id: string | null
         }
         Insert: {
@@ -169,6 +171,8 @@ export type Database = {
           created_at?: string
           id?: string
           legal_name: string
+          region?: string | null
+          sector?: Database["public"]["Enums"]["industry_sector"] | null
           tax_id?: string | null
         }
         Update: {
@@ -176,6 +180,8 @@ export type Database = {
           created_at?: string
           id?: string
           legal_name?: string
+          region?: string | null
+          sector?: Database["public"]["Enums"]["industry_sector"] | null
           tax_id?: string | null
         }
         Relationships: []
@@ -312,6 +318,77 @@ export type Database = {
           },
         ]
       }
+      facility_covenants: {
+        Row: {
+          bbc_valid_days: number
+          created_at: string
+          facility_id: string
+          max_utilization_pct: number
+          require_monthly_bbc: boolean
+          require_monthly_statement: boolean
+          updated_at: string
+        }
+        Insert: {
+          bbc_valid_days?: number
+          created_at?: string
+          facility_id: string
+          max_utilization_pct?: number
+          require_monthly_bbc?: boolean
+          require_monthly_statement?: boolean
+          updated_at?: string
+        }
+        Update: {
+          bbc_valid_days?: number
+          created_at?: string
+          facility_id?: string
+          max_utilization_pct?: number
+          require_monthly_bbc?: boolean
+          require_monthly_statement?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facility_covenants_facility_id_fkey"
+            columns: ["facility_id"]
+            isOneToOne: true
+            referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          link: string | null
+          read_at: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -392,7 +469,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      portfolio_aggregates: {
+        Row: {
+          credit_limit: number | null
+          facilities: number | null
+          principal_outstanding: number | null
+          region: string | null
+          sector: Database["public"]["Enums"]["industry_sector"] | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       facility_accrued_interest: {
@@ -406,6 +492,14 @@ export type Database = {
       facility_has_recent_approved_bbc: {
         Args: { p_days?: number; p_facility: string }
         Returns: boolean
+      }
+      facility_policy_breaches: {
+        Args: { p_facility: string }
+        Returns: {
+          code: string
+          message: string
+          severity: string
+        }[]
       }
       get_facility_principal: {
         Args: { p_facility_id?: string }
@@ -434,6 +528,26 @@ export type Database = {
           last_draw_decided_at: string
           principal_outstanding: number
           utilization_pct: number
+        }[]
+      }
+      notify_borrower_users: {
+        Args: {
+          p_body: string
+          p_facility: string
+          p_link: string
+          p_title: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      portfolio_policy_breaches: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          code: string
+          customer_name: string
+          facility_id: string
+          message: string
+          severity: string
         }[]
       }
       post_interest_all_active: {
@@ -478,6 +592,15 @@ export type Database = {
         Args: { uid: string }
         Returns: string
       }
+      utilization_timeseries: {
+        Args: { p_days?: number; p_facility: string }
+        Returns: {
+          credit_limit: number
+          d: string
+          principal: number
+          utilization_pct: number
+        }[]
+      }
     }
     Enums: {
       app_role:
@@ -495,6 +618,14 @@ export type Database = {
       decision_status: "submitted" | "under_review" | "approved" | "rejected"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
+      industry_sector:
+        | "manufacturing"
+        | "wholesale"
+        | "retail"
+        | "services"
+        | "construction"
+        | "energy"
+        | "other"
       txn_type:
         | "advance"
         | "payment"
@@ -647,6 +778,15 @@ export const Constants = {
       decision_status: ["submitted", "under_review", "approved", "rejected"],
       facility_status: ["active", "paused", "closed"],
       facility_type: ["revolving", "single_loan"],
+      industry_sector: [
+        "manufacturing",
+        "wholesale",
+        "retail",
+        "services",
+        "construction",
+        "energy",
+        "other",
+      ],
       txn_type: [
         "advance",
         "payment",
