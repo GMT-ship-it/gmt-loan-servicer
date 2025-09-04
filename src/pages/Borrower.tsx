@@ -9,6 +9,7 @@ import { Row } from '@/components/Row';
 import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
+import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 // @ts-ignore
 import jsPDF from 'jspdf';
 // @ts-ignore
@@ -55,6 +56,10 @@ type BbcItem = {
 export default function BorrowerPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [loadingFacility, setLoadingFacility] = useState(true);
+  const [loadingTx, setLoadingTx] = useState(true);
+  const [loadingDraws, setLoadingDraws] = useState(true);
+  const [loadingBBC, setLoadingBBC] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -147,104 +152,119 @@ export default function BorrowerPage() {
 
       if (cust) {
         // 1) Load the first facility for this customer (you can later support multiple)
-        const { data: fac, error: fErr } = await supabase
-          .from('facilities')
-          .select('id, type, credit_limit, apr, min_advance')
-          .eq('customer_id', p.customer_id!)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (fErr) { setErr(fErr.message); setLoading(false); return; }
-        setFacility(fac || null);
-
-        // 2) Load principal using the secure function
-        if (fac?.id) {
-          const { data: princData, error: prErr } = await supabase
-            .rpc('get_facility_principal', { p_facility_id: fac.id });
-
-          if (prErr) {
-            setErr(prErr.message);
-          } else {
-            // The function returns an array, get the first result
-            const princRow = princData?.[0];
-            setPrincipal(princRow?.principal_outstanding ?? 0);
-          }
-
-          // 3) Load transactions for this facility
-          const { data: txRows, error: txErr } = await supabase
-            .from('transactions')
-            .select('id, type, amount, effective_at, memo')
-            .eq('facility_id', fac.id)
-            .order('effective_at', { ascending: false });
-
-          if (txErr) {
-            setErr(txErr.message);
-          } else {
-            setTxs(txRows || []);
-          }
-
-          // 4) Available to Draw (server-computed, RLS applies via underlying tables)
-          const { data: avail, error: aErr } = await supabase
-            .rpc('facility_available_to_draw', { p_facility: fac.id });
-
-          if (!aErr) setAvailable(Number(avail ?? 0));
-
-          // 5) Accrued Interest (unposted)
-          const { data: accr, error: accErr } = await supabase
-            .rpc('facility_accrued_interest', { p_facility: fac.id });
-          if (!accErr) setAccrued(Number(accr ?? 0));
-
-          // 5) Load draw requests for this facility
-          const { data: drs, error: drErr } = await supabase
-            .from('draw_requests')
-            .select('id, amount, status, created_at')
-            .eq('facility_id', fac.id)
-            .order('created_at', { ascending: false });
-
-          if (!drErr) {
-            setDraws(drs || []);
-            
-            // Load docs for latest submitted draw
-            const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
-            setActiveDrawId(latestSubmitted?.id ?? null);
-            
-            if (latestSubmitted?.id) {
-              const { data: dd, error: ddErr } = await supabase
-                .from('draw_documents')
-                .select('id, path, original_name, mime_type, size_bytes, uploaded_at')
-                .eq('draw_request_id', latestSubmitted.id)
-                .order('uploaded_at', { ascending: false });
-              
-              if (!ddErr) setDocs(dd || []);
-            } else {
-              setDocs([]);
-            }
-          }
-
-          // 6) Load BBC for this facility
-          const { data: rep } = await supabase
-            .from('borrowing_base_reports')
-            .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
-            .eq('facility_id', fac.id)
-            .order('period_end', { ascending: false })
+        try {
+          const { data: fac, error: fErr } = await supabase
+            .from('facilities')
+            .select('id, type, credit_limit, apr, min_advance')
+            .eq('customer_id', p.customer_id!)
+            .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          setBbc(rep || null);
+          if (fErr) { setErr(fErr.message); setLoading(false); return; }
+          setFacility(fac || null);
+          setLoadingFacility(false);
 
-          if (rep?.id) {
-            const { data: items } = await supabase
-              .from('borrowing_base_items')
-              .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
-              .eq('report_id', rep.id)
+          // 2) Load principal using the secure function
+          if (fac?.id) {
+            const { data: princData, error: prErr } = await supabase
+              .rpc('get_facility_principal', { p_facility_id: fac.id });
+
+            if (prErr) {
+              setErr(prErr.message);
+            } else {
+              // The function returns an array, get the first result
+              const princRow = princData?.[0];
+              setPrincipal(princRow?.principal_outstanding ?? 0);
+            }
+
+            // 3) Load transactions for this facility
+            const { data: txRows, error: txErr } = await supabase
+              .from('transactions')
+              .select('id, type, amount, effective_at, memo')
+              .eq('facility_id', fac.id)
+              .order('effective_at', { ascending: false });
+
+            if (txErr) {
+              setErr(txErr.message);
+            } else {
+              setTxs(txRows || []);
+              setLoadingTx(false);
+            }
+
+            // 4) Available to Draw (server-computed, RLS applies via underlying tables)
+            const { data: avail, error: aErr } = await supabase
+              .rpc('facility_available_to_draw', { p_facility: fac.id });
+
+            if (!aErr) setAvailable(Number(avail ?? 0));
+
+            // 5) Accrued Interest (unposted)
+            const { data: accr, error: accErr } = await supabase
+              .rpc('facility_accrued_interest', { p_facility: fac.id });
+            if (!accErr) setAccrued(Number(accr ?? 0));
+
+            // 5) Load draw requests for this facility
+            const { data: drs, error: drErr } = await supabase
+              .from('draw_requests')
+              .select('id, amount, status, created_at')
+              .eq('facility_id', fac.id)
               .order('created_at', { ascending: false });
-            setBbcItems(items || []);
+
+            if (!drErr) {
+              setDraws(drs || []);
+              setLoadingDraws(false);
+              
+              // Load docs for latest submitted draw
+              const latestSubmitted = (drs || []).find(d => d.status === 'submitted');
+              setActiveDrawId(latestSubmitted?.id ?? null);
+              
+              if (latestSubmitted?.id) {
+                const { data: dd, error: ddErr } = await supabase
+                  .from('draw_documents')
+                  .select('id, path, original_name, mime_type, size_bytes, uploaded_at')
+                  .eq('draw_request_id', latestSubmitted.id)
+                  .order('uploaded_at', { ascending: false });
+                
+                if (!ddErr) setDocs(dd || []);
+              } else {
+                setDocs([]);
+              }
+            }
+
+            // 6) Load BBC for this facility
+            const { data: rep } = await supabase
+              .from('borrowing_base_reports')
+              .select('id, facility_id, period_end, status, gross_collateral, ineligibles, reserves, advance_rate, borrowing_base, availability, created_at')
+              .eq('facility_id', fac.id)
+              .order('period_end', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            setBbc(rep || null);
+            setLoadingBBC(false);
+
+            if (rep?.id) {
+              const { data: items } = await supabase
+                .from('borrowing_base_items')
+                .select('id, report_id, item_type, ref, note, amount, ineligible, haircut_rate, created_at')
+                .eq('report_id', rep.id)
+                .order('created_at', { ascending: false });
+              setBbcItems(items || []);
+            } else {
+              setBbcItems([]);
+            }
           } else {
-            setBbcItems([]);
+            setPrincipal(0);
+            setLoadingFacility(false);
+            setLoadingTx(false);
+            setLoadingDraws(false);
+            setLoadingBBC(false);
           }
-        } else {
-          setPrincipal(0);
+        } catch (error) {
+          setLoadingFacility(false);
+          setLoadingTx(false);
+          setLoadingDraws(false);
+          setLoadingBBC(false);
         }
       }
 
@@ -558,16 +578,33 @@ export default function BorrowerPage() {
 
       {/* Row: Facility snapshot */}
       <Row title="Facility Snapshot">
-        <MetricCard label="Credit Limit" value={creditLimitFmt} sub={`APR ${aprFmt}`} />
-        <MetricCard label="Outstanding Principal" value={principalFmt} sub="Updated in real time" />
-        <MetricCard label="Available to Draw" value={availableFmt} sub={bbcFresh ? 'BBC fresh' : 'BBC stale'} />
-        <MetricCard label="Accrued Interest" value={accruedFmt} sub="Unposted" />
+        {loadingFacility ? (
+          <>
+            <MetricSkeleton />
+            <MetricSkeleton />
+            <MetricSkeleton />
+            <MetricSkeleton />
+          </>
+        ) : (
+          <>
+            <MetricCard label="Credit Limit" value={creditLimitFmt} sub={`APR ${aprFmt}`} />
+            <MetricCard label="Outstanding Principal" value={principalFmt} sub="Updated in real time" />
+            <MetricCard label="Available to Draw" value={availableFmt} sub={bbcFresh ? 'BBC fresh' : 'BBC stale'} />
+            <MetricCard label="Accrued Interest" value={accruedFmt} sub="Unposted" />
+          </>
+        )}
       </Row>
 
       {/* Row: Recent Activity (transactions) */}
-      {!!txs?.length && (
-        <Row title="Recent Activity">
-          {txs.map((t: any) => (
+      <Row title="Recent Activity">
+        {loadingTx ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !txs?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No transactions yet
+          </div>
+        ) : (
+          txs.map((t: any) => (
             <ListCard
               key={t.id}
               title={`${String(t.type).toUpperCase()} • ${money(t.amount)}`}
@@ -580,17 +617,23 @@ export default function BorrowerPage() {
               }
               muted={t.memo || ''}
             />
-          ))}
-        </Row>
-      )}
+          ))
+        )}
+      </Row>
 
       {/* Row: Draw requests */}
-      {!!draws?.length && (
-        <Row
-          title="Draw Requests"
-          action={<button className="text-sm text-neutral-300 hover:text-white">View all</button>}
-        >
-          {draws.map((d: any) => (
+      <Row
+        title="Draw Requests"
+        action={<button className="text-sm text-neutral-300 hover:text-white">View all</button>}
+      >
+        {loadingDraws ? (
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !draws?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No draws yet — Request funds to get started
+          </div>
+        ) : (
+          draws.map((d: any) => (
             <ListCard
               key={d.id}
               title={`Request ${money(d.amount)}`}
@@ -603,21 +646,27 @@ export default function BorrowerPage() {
               }
               muted={`Draw ID: ${d.id.slice(0, 8)}`}
             />
-          ))}
-        </Row>
-      )}
+          ))
+        )}
+      </Row>
 
       {/* Row: BBC reports */}
-      {!!bbc && (
-        <Row title="Borrowing Base Certificates">
+      <Row title="Borrowing Base Certificates">
+        {loadingBBC ? (
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !bbc ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No BBC reports yet
+          </div>
+        ) : (
           <ListCard
             key={bbc.id}
             title={`Period End • ${bbc.period_end}`}
             meta={`Borrowing Base ${money(bbc.borrowing_base)} • Availability ${money(bbc.availability)}`}
             right={<Chip text={bbc.status} tone={bbc.status === 'approved' ? 'ok' : bbc.status === 'rejected' ? 'bad' : 'warn'} />}
           />
-        </Row>
-      )}
+        )}
+      </Row>
     </>
   );
 }

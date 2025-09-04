@@ -16,6 +16,7 @@ import { Row } from '@/components/Row';
 import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
+import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 import type { Facility } from '@/types/facility';
 
 type Customer = { id: string; legal_name: string; };
@@ -117,6 +118,9 @@ export default function AdminPage() {
   // Exposure state
   const [exposure, setExposure] = useState<ExposureRow[]>([]);
   const [loadingExposure, setLoadingExposure] = useState(false);
+  const [loadingDraws, setLoadingDraws] = useState(false);
+  const [loadingBBC, setLoadingBBC] = useState(false);
+  const [loadingAudit, setLoadingAudit] = useState(false);
   
   // Compliance and Analytics state
   const [breaches, setBreaches] = useState<any[]>([]);
@@ -191,6 +195,7 @@ export default function AdminPage() {
   };
 
   const loadBBCReviews = async () => {
+    setLoadingBBC(true);
     try {
       const { data, error } = await supabase
         .from('borrowing_base_reports')
@@ -222,10 +227,13 @@ export default function AdminPage() {
         description: "Failed to load BBC reviews",
         variant: "destructive",
       });
+    } finally {
+      setLoadingBBC(false);
     }
   };
 
   const loadAudit = async () => {
+    setLoadingAudit(true);
     try {
       const { data, error } = await supabase
         .from('audit_log')
@@ -242,6 +250,8 @@ export default function AdminPage() {
         description: "Failed to load audit logs",
         variant: "destructive",
       });
+    } finally {
+      setLoadingAudit(false);
     }
   };
 
@@ -296,16 +306,21 @@ export default function AdminPage() {
   };
 
   const loadDrawRequests = async () => {
-    const { data: drs, error: drErr } = await supabase
-      .from('draw_requests')
-      .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
-      .order('created_at', { ascending: false });
+    setLoadingDraws(true);
+    try {
+      const { data: drs, error: drErr } = await supabase
+        .from('draw_requests')
+        .select('id, facility_id, amount, status, decision_notes, required_docs_ok, created_at')
+        .order('created_at', { ascending: false });
 
-    if (drErr) setErr(drErr.message);
-    else {
-      setDraws(drs || []);
-      await fetchDocsForDraws((drs || []).map(d => d.id));
-      await computeComplianceFor(drs || []);
+      if (drErr) setErr(drErr.message);
+      else {
+        setDraws(drs || []);
+        await fetchDocsForDraws((drs || []).map(d => d.id));
+        await computeComplianceFor(drs || []);
+      }
+    } finally {
+      setLoadingDraws(false);
     }
   };
 
@@ -533,32 +548,49 @@ export default function AdminPage() {
 
       {/* KPIs */}
       <Row title="Portfolio KPIs">
-        <MetricCard
-          label="Active Facilities"
-          value={String(exposure?.length || 0)}
-          sub="with current utilization"
-        />
-        <MetricCard
-          label="Total Exposure"
-          value={money(exposure?.reduce((a: number, r: any) => a + Number(r.principal_outstanding || 0), 0))}
-          sub="Outstanding principal"
-        />
-        <MetricCard
-          label="Total Availability"
-          value={money(exposure?.reduce((a: number, r: any) => a + Number(r.available_to_draw || 0), 0))}
-          sub="Across facilities"
-        />
-        <MetricCard
-          label="BBC Status"
-          value={`${exposure?.filter((r: any) => r.bbc_approved_within_45d).length || 0} fresh`}
-          sub={`${exposure?.filter((r: any) => !r.bbc_approved_within_45d).length || 0} stale`}
-        />
+        {loadingExposure ? (
+          <>
+            <MetricSkeleton />
+            <MetricSkeleton />
+            <MetricSkeleton />
+            <MetricSkeleton />
+          </>
+        ) : (
+          <>
+            <MetricCard
+              label="Active Facilities"
+              value={String(exposure?.length || 0)}
+              sub="with current utilization"
+            />
+            <MetricCard
+              label="Total Exposure"
+              value={money(exposure?.reduce((a: number, r: any) => a + Number(r.principal_outstanding || 0), 0))}
+              sub="Outstanding principal"
+            />
+            <MetricCard
+              label="Total Availability"
+              value={money(exposure?.reduce((a: number, r: any) => a + Number(r.available_to_draw || 0), 0))}
+              sub="Across facilities"
+            />
+            <MetricCard
+              label="BBC Status"
+              value={`${exposure?.filter((r: any) => r.bbc_approved_within_45d).length || 0} fresh`}
+              sub={`${exposure?.filter((r: any) => !r.bbc_approved_within_45d).length || 0} stale`}
+            />
+          </>
+        )}
       </Row>
 
       {/* Approvals (Draw Requests) */}
-      {!!draws?.length && (
-        <Row title="Approvals (Draw Requests)">
-          {draws.map((d: any) => (
+      <Row title="Approvals (Draw Requests)">
+        {loadingDraws ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !draws?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No draw requests pending
+          </div>
+        ) : (
+          draws.map((d: any) => (
             <div key={d.id} className="min-w-[360px] snap-start card-surface p-4">
               <div className="flex items-center justify-between">
                 <div className="text-base font-semibold">
@@ -630,14 +662,20 @@ export default function AdminPage() {
                 </Button>
               </div>
             </div>
-          ))}
-        </Row>
-      )}
+          ))
+        )}
+      </Row>
 
       {/* BBC Review */}
-      {!!bbcReviews?.length && (
-        <Row title="Borrowing Base Review">
-          {bbcReviews.map((r: any) => (
+      <Row title="Borrowing Base Review">
+        {loadingBBC ? (
+          Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !bbcReviews?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No BBC reports pending review
+          </div>
+        ) : (
+          bbcReviews.map((r: any) => (
             <div key={r.id} className="min-w-[360px] snap-start card-surface p-4">
               <div className="flex items-center justify-between">
                 <div className="text-base font-semibold">
@@ -668,17 +706,23 @@ export default function AdminPage() {
                 </Button>
               </div>
             </div>
-          ))}
-        </Row>
-      )}
+          ))
+        )}
+      </Row>
 
       {/* Exposure */}
-      {!!exposure?.length && (
-        <Row
-          title="Exposure (Top Utilization)"
-          action={<Button variant="outline" onClick={loadExposure} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
-        >
-          {exposure
+      <Row
+        title="Exposure (Top Utilization)"
+        action={<Button variant="outline" onClick={loadExposure} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+      >
+        {loadingExposure ? (
+          Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !exposure?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No facilities found
+          </div>
+        ) : (
+          exposure
             .slice() // copy
             .sort((a: any, b: any) => Number(b.utilization_pct) - Number(a.utilization_pct))
             .map((r: any) => (
@@ -695,17 +739,23 @@ export default function AdminPage() {
                   {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
                 </div>
               </div>
-            ))}
-        </Row>
-      )}
+            ))
+        )}
+      </Row>
 
       {/* Audit (last actions) */}
-      {!!audit?.length && (
-        <Row
-          title="Recent Audit"
-          action={<Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
-        >
-          {audit.slice(0,12).map((a: any) => (
+      <Row
+        title="Recent Audit"
+        action={<Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+      >
+        {loadingAudit ? (
+          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : !audit?.length ? (
+          <div className="min-w-[320px] card-surface p-4 text-center text-neutral-400">
+            No audit logs found
+          </div>
+        ) : (
+          audit.slice(0,12).map((a: any) => (
             <ListCard
               key={a.id}
               title={a.action}
@@ -713,9 +763,9 @@ export default function AdminPage() {
               right={<span className="text-xs text-neutral-400">{a.table_name}</span>}
               muted={a.record_id ? `Record ${a.record_id}` : ''}
             />
-          ))}
-        </Row>
-      )}
+          ))
+        )}
+      </Row>
 
       {/* Analytics (optional charts already in your file) — wrap them in card-surface or reuse rows */}
       <section className="mt-8">
