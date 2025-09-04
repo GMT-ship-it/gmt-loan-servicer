@@ -129,7 +129,32 @@ export default function AdminPage() {
   // Compliance state
   const [complianceByDraw, setComplianceByDraw] = useState<Record<string, Compliance>>({});
 
-  // Exposure state
+  // Exposure filtering state
+  const [utilMin, setUtilMin] = useState<number>(0);
+  const [availMax, setAvailMax] = useState<number>(0);
+  const [bbcOnlyFresh, setBbcOnlyFresh] = useState<boolean>(false);
+
+  // Audit log state
+  type AuditRow = { 
+    id: string; 
+    created_at: string | null; 
+    action: string; 
+    table_name: string; 
+    user_id: string | null; 
+    record_id: string | null; 
+    new_values: any; 
+    old_values: any; 
+  };
+  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [auditFrom, setAuditFrom] = useState<string>(() => 
+    new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10)
+  );
+  const [loadingAudit, setLoadingAudit] = useState(false);
+
+  // Facilities labeled for friendly names
+  const [facLabeled, setFacLabeled] = useState<{facility_id: string; customer_name: string; short_id: string}[]>([]);
+
+  // Exposure state (re-added)
   const [exposure, setExposure] = useState<ExposureRow[]>([]);
   const [loadingExposure, setLoadingExposure] = useState(false);
 
@@ -194,6 +219,18 @@ export default function AdminPage() {
 
       // Load exposure data
       await loadExposure();
+
+      // Load facilities labeled for dropdowns using RPC or direct query
+      const { data: facLab, error: facErr } = await supabase
+        .rpc('lender_exposure_snapshot'); // Use this to get facility names
+      if (!facErr && facLab) {
+        const labeled = facLab.map((f: any) => ({
+          facility_id: f.facility_id,
+          customer_name: f.customer_name,
+          short_id: f.facility_id.slice(0, 8)
+        }));
+        setFacLabeled(labeled);
+      }
 
       setLoading(false);
     })();
@@ -398,12 +435,31 @@ export default function AdminPage() {
     setComplianceByDraw(result);
   }
 
+  async function loadAudit() {
+    setLoadingAudit(true);
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .gte('created_at', auditFrom)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    setLoadingAudit(false);
+    if (!error) setAudit(data || []);
+  }
+
   async function loadExposure() {
     setLoadingExposure(true);
     const { data, error } = await supabase.rpc('lender_exposure_snapshot');
     setLoadingExposure(false);
     if (!error) setExposure(data || []);
   }
+
+  // Filter exposure based on criteria
+  const filtered = exposure.filter(r =>
+    (utilMin ? r.utilization_pct >= utilMin : true) &&
+    (availMax ? r.available_to_draw <= availMax : true) &&
+    (!bbcOnlyFresh || r.bbc_approved_within_45d)
+  );
 
   async function loadBbcItems(reportId: string) {
     if (bbcItemsById[reportId]) return; // already loaded
@@ -681,11 +737,13 @@ export default function AdminPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select facility" />
                 </SelectTrigger>
-                <SelectContent>
-                  {facilitiesList.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.id}</SelectItem>
-                  ))}
-                </SelectContent>
+            <SelectContent>
+              {facLabeled.map(f => (
+                <SelectItem key={f.facility_id} value={f.facility_id}>
+                  {f.customer_name} • {f.short_id}
+                </SelectItem>
+              ))}
+            </SelectContent>
               </Select>
             </div>
 
@@ -905,11 +963,13 @@ export default function AdminPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select facility" />
                 </SelectTrigger>
-                <SelectContent>
-                  {facilitiesList.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.id}</SelectItem>
-                  ))}
-                </SelectContent>
+            <SelectContent>
+              {facLabeled.map(f => (
+                <SelectItem key={f.facility_id} value={f.facility_id}>
+                  {f.customer_name} • {f.short_id}
+                </SelectItem>
+              ))}
+            </SelectContent>
               </Select>
             </div>
 
@@ -922,7 +982,53 @@ export default function AdminPage() {
             </div>
           </form>
         </CardContent>
-      </Card>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Audit Log</CardTitle>
+            <div className="flex items-end gap-2">
+              <div>
+                <label className="text-xs">From</label>
+                <input 
+                  type="date" 
+                  value={auditFrom} 
+                  onChange={e => setAuditFrom(e.target.value)} 
+                  className="border rounded px-2 py-1" 
+                />
+              </div>
+              <Button variant="outline" onClick={loadAudit} disabled={loadingAudit}>
+                {loadingAudit ? 'Loading…' : 'Refresh'}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {audit.length === 0 ? (
+              <div className="text-muted-foreground">No entries found.</div>
+            ) : (
+              <div className="grid gap-2 max-h-96 overflow-y-auto">
+                {audit.map(a => (
+                  <div key={a.id} className="border rounded p-3 text-xs">
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-medium">{a.action}</div>
+                      <div className="text-muted-foreground">
+                        {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground mb-2">
+                      Table: {a.table_name} • User: {a.user_id || 'system'} • Record: {a.record_id || '—'}
+                    </div>
+                    {(a.new_values || a.old_values) && (
+                      <pre className="whitespace-pre-wrap text-xs bg-muted p-2 rounded overflow-x-auto">
+                        {JSON.stringify(a.new_values || a.old_values || {}, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
       <Card>
         <CardHeader><CardTitle>BBC Review</CardTitle></CardHeader>

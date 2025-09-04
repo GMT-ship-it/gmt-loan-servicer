@@ -426,36 +426,53 @@ export default function BorrowerPage() {
     try {
       const { start, end } = monthBounds(stmtMonth);
 
-      const [{ data: header, error: hErr }, { data: lines, error: lErr }] = await Promise.all([
+      // Fetch customer name and BBC compliance
+      const [
+        { data: header, error: hErr }, 
+        { data: lines, error: lErr },
+        { data: bbcOk, error: bbcErr }
+      ] = await Promise.all([
         supabase.rpc('statement_header', { p_facility: facility.id, p_start: start, p_end: end }),
-        supabase.rpc('statement_txns', { p_facility: facility.id, p_start: start, p_end: end })
+        supabase.rpc('statement_txns', { p_facility: facility.id, p_start: start, p_end: end }),
+        supabase.rpc('facility_has_recent_approved_bbc', { p_facility: facility.id, p_days: 45 })
       ]);
+      
       if (hErr) throw hErr;
       if (lErr) throw lErr;
 
       const hdr = Array.isArray(header) ? header[0] : header;
       const txns = Array.isArray(lines) ? lines : [];
+      const customerName = customer?.legal_name || 'Customer';
 
       const doc = new jsPDF();
+      const money = (n: number) => (Number(n || 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-      // Header
+      // OPTIONAL: Add logo (uncomment and replace with actual base64)
+      // try {
+      //   doc.addImage('data:image/png;base64,YOUR_BASE64_HERE', 'PNG', 14, 8, 28, 10);
+      // } catch { /* no logo */ }
+
+      // Enhanced Header
       doc.setFontSize(14);
       doc.text('Mountain Investments — Monthly Statement', 14, 16);
       doc.setFontSize(10);
-      doc.text(`Facility: ${facility.id}`, 14, 24);
-      doc.text(`Period: ${start} to ${end}`, 14, 30);
+      doc.text(`Customer: ${customerName}`, 14, 22);
+      doc.text(`Facility: ${facility.id}`, 14, 27);
+      doc.text(`Period: ${start} to ${end}`, 14, 32);
 
-      // Snapshot
-      const money = (n: number) => (Number(n || 0)).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-      doc.text(`Opening Principal: ${money(hdr?.opening_principal)}`, 14, 38);
-      doc.text(`Closing Principal: ${money(hdr?.closing_principal)}`, 14, 44);
-      doc.text(`Interest Posted:  ${money(hdr?.interest_posted)}`, 14, 50);
-      doc.text(`Accrued (EOM, unposted): ${money(hdr?.accrued_interest_eom)}`, 14, 56);
+      // Compliance status line
+      doc.text(`Compliance: BBC ≤45d ${bbcOk ? 'OK' : 'STALE'} • Docs OK reflects draw-level`, 14, 38);
 
-      // Table of transactions
+      // Financial snapshot (shifted down)
+      doc.text(`Opening Principal: ${money(hdr?.opening_principal)}`, 14, 46);
+      doc.text(`Closing Principal: ${money(hdr?.closing_principal)}`, 14, 52);
+      doc.text(`Interest Posted: ${money(hdr?.interest_posted)}`, 14, 58);
+      doc.text(`Accrued (EOM, unposted): ${money(hdr?.accrued_interest_eom)}`, 14, 64);
+
+      // Table of transactions (shifted down)
       // @ts-ignore
       doc.autoTable({
-        startY: 64,
+        startY: 72,
         head: [['Date/Time', 'Type', 'Amount', 'Memo']],
         body: txns.map((t: any) => [
           new Date(t.effective_at).toLocaleString(),
@@ -474,6 +491,13 @@ export default function BorrowerPage() {
       setStmtLoading(false);
     }
   }
+
+  // Helper to set last month quickly
+  const setLastMonth = () => {
+    const dt = new Date(); 
+    dt.setMonth(dt.getMonth() - 1);
+    setStmtMonth(dt.toISOString().slice(0, 7));
+  };
 
   if (loading) return <div className="p-6">Loading borrower…</div>;
   if (err) return <div className="p-6 text-destructive">Error: {err}</div>;
@@ -545,19 +569,29 @@ export default function BorrowerPage() {
 
       <Card>
         <CardHeader><CardTitle>Monthly Statement</CardTitle></CardHeader>
-        <CardContent className="flex items-end gap-3">
-          <div className="grid gap-1">
-            <label className="text-sm">Month</label>
-            <input
-              type="month"
-              value={stmtMonth}
-              onChange={(e) => setStmtMonth(e.target.value)}
-              className="border rounded px-3 py-2"
-            />
+        <CardContent className="space-y-3">
+          <div className="flex items-end gap-3">
+            <div className="grid gap-1">
+              <label className="text-sm">Month</label>
+              <input
+                type="month"
+                value={stmtMonth}
+                onChange={(e) => setStmtMonth(e.target.value)}
+                className="border rounded px-3 py-2"
+              />
+            </div>
+            <Button variant="outline" onClick={setLastMonth}>Last Month</Button>
+            <Button onClick={downloadStatementPdf} disabled={!facility?.id || stmtLoading}>
+              {stmtLoading ? 'Preparing…' : 'Download PDF'}
+            </Button>
           </div>
-          <Button onClick={downloadStatementPdf} disabled={!facility?.id || stmtLoading}>
-            {stmtLoading ? 'Preparing…' : 'Download PDF'}
-          </Button>
+          
+          <details className="mt-2">
+            <summary className="cursor-pointer text-sm underline">How is interest calculated?</summary>
+            <div className="text-xs text-muted-foreground mt-1">
+              Daily accrual: principal × APR / 365 × days between cashflow events. Posting resets accrual.
+            </div>
+          </details>
         </CardContent>
       </Card>
 
