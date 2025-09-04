@@ -22,7 +22,7 @@ function toCsv(rows: any[]) {
   const cols = ["created_at","action","table_name","user_id","record_id","old_values","new_values"];
   const esc = (v: any) => {
     const s = typeof v === 'string' ? v : JSON.stringify(v || '');
-    return `"${s.replaceAll(`"`, `""`))}"`;
+    return `"${s.replaceAll(`"`, `""`)}"`;
   };
   const head = cols.join(",");
   const body = rows.map(r => cols.map(c => esc((r as any)[c])).join(",")).join("\n");
