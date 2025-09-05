@@ -71,7 +71,8 @@ export default function AppShell() {
     { to: '/analytics',label: 'Analytics' },
   ];
   return (
-    <div className="min-h-screen">
+    <NotificationsProvider>
+      <div className="min-h-screen">
       <header className="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
@@ -92,11 +93,10 @@ export default function AppShell() {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 pb-16">
-        <NotificationsProvider>
-          <Outlet />
-        </NotificationsProvider>
+        <Outlet />
       </main>
       <CommandPalette />
     </div>
+    </NotificationsProvider>
   );
 }
