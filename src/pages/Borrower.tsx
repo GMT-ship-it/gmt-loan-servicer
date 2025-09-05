@@ -745,6 +745,76 @@ export default function BorrowerPage() {
           />
         )}
       </Row>
+
+      {/* Printable Statement Section */}
+      <div className="print-compact mt-12">
+        <h1 className="text-xl font-bold mb-2">Monthly Statement — {customer?.legal_name || 'Borrower'}</h1>
+        <div className="text-sm text-neutral-500 mb-4">
+          {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
+        </div>
+
+        {/* Account Snapshot */}
+        <section className="avoid-break mb-6 card-surface p-4">
+          <h2 className="font-semibold mb-2">Account Snapshot</h2>
+          <table>
+            <tbody>
+              <tr><td>Credit Limit</td><td>{creditLimitFmt}</td></tr>
+              <tr><td>Principal Outstanding</td><td>{principalFmt}</td></tr>
+              <tr><td>Available to Draw</td><td>{availableFmt}</td></tr>
+              <tr><td>Accrued Interest (unposted)</td><td>{accruedFmt}</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        {/* Transactions */}
+        <section className="avoid-break mb-6 card-surface p-4">
+          <h2 className="font-semibold mb-2">Recent Transactions</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Memo</th>
+                <th style={{textAlign:'right'}}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {txs.slice(0, 20).map((t: any) => (
+                <tr key={t.id}>
+                  <td>{new Date(t.effective_at).toLocaleDateString()}</td>
+                  <td>{String(t.type).toUpperCase()}</td>
+                  <td>{t.memo || ''}</td>
+                  <td style={{textAlign:'right'}}>{money(t.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        {/* BBC Summary */}
+        <section className="avoid-break mb-6 card-surface p-4">
+          <h2 className="font-semibold mb-2">Borrowing Base Summary</h2>
+          {bbc ? (
+            <table>
+              <tbody>
+                <tr><td>Period End</td><td>{bbc.period_end}</td></tr>
+                <tr><td>Status</td><td>{bbc.status}</td></tr>
+                <tr><td>Borrowing Base</td><td>{money(bbc.borrowing_base || 0)}</td></tr>
+                <tr><td>Availability (from BBC)</td><td>{money(bbc.availability || 0)}</td></tr>
+              </tbody>
+            </table>
+          ) : (
+            <div>No BBC submitted.</div>
+          )}
+        </section>
+
+        <button
+          className="no-print bg-white text-black hover:bg-neutral-100 rounded px-4 py-2 font-medium"
+          onClick={() => window.print()}
+        >
+          Print / Save as PDF
+        </button>
+      </div>
     </>
   );
 }

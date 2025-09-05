@@ -769,7 +769,7 @@ export default function AdminPage() {
       {/* Analytics (optional charts already in your file) — wrap them in card-surface or reuse rows */}
       <section className="mt-8">
         <Row title="Analytics">
-          <div className="min-w-[500px] card-surface p-6">
+          <div className="min-w-[500px] card-surface p-6 chart-container">
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-white">Portfolio by Sector/Region</h3>
               <p className="text-sm text-neutral-300">Outstanding balances and credit limits by industry sector</p>
@@ -795,13 +795,13 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="min-w-[500px] card-surface p-6">
+          <div className="min-w-[500px] card-surface p-6 chart-container">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-white">Utilization Trend (90 days)</h3>
                 <p className="text-sm text-neutral-300">Track facility utilization over time</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 no-print">
                 <Input
                   placeholder="Enter Facility ID"
                   value={timeSeriesFacility}
@@ -863,6 +863,76 @@ export default function AdminPage() {
           )}
         </Row>
       </section>
+
+      {/* Printable Admin Report */}
+      <div className="print-compact mt-12">
+        <h1 className="text-xl font-bold mb-2">Portfolio Exposure — {new Date().toLocaleDateString()}</h1>
+
+        <section className="avoid-break mb-6 card-surface p-4">
+          <h2 className="font-semibold mb-2">Exposure Summary</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Limit</th>
+                <th>Outstanding</th>
+                <th>Utilization %</th>
+                <th>Available</th>
+                <th>BBC Fresh</th>
+                <th>Last Draw</th>
+              </tr>
+            </thead>
+            <tbody>
+              {exposure.map((r:any) => (
+                <tr key={r.facility_id}>
+                  <td>{r.customer_name}</td>
+                  <td>{money(r.credit_limit)}</td>
+                  <td>{money(r.principal_outstanding)}</td>
+                  <td>{Number(r.utilization_pct).toFixed(1)}%</td>
+                  <td>{money(r.available_to_draw)}</td>
+                  <td>{r.bbc_approved_within_45d ? 'Yes' : 'No'}</td>
+                  <td>{r.last_draw_decided_at ? new Date(r.last_draw_decided_at).toLocaleDateString() : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="avoid-break mb-6 card-surface p-4">
+          <h2 className="font-semibold mb-2">Pending Draw Approvals</h2>
+          {draws.filter(d => d.status === 'submitted').length ? (
+            <table>
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Docs</th>
+                  <th>BBC</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {draws.filter(d => d.status === 'submitted').map((d:any)=>(
+                  <tr key={d.id}>
+                    <td>{d.facility_id.slice(0,8)}</td>
+                    <td>{money(d.amount)}</td>
+                    <td>{d.required_docs_ok ? 'OK' : 'Missing'}</td>
+                    <td>{complianceByDraw?.[d.id]?.bbcOk ? 'Fresh' : 'Stale'}</td>
+                    <td>{new Date(d.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : <div>No pending draws.</div>}
+        </section>
+
+        <button 
+          className="no-print bg-white text-black hover:bg-neutral-100 rounded px-4 py-2 font-medium"
+          onClick={() => window.print()}
+        >
+          Print / Save as PDF
+        </button>
+      </div>
     </>
   );
 }

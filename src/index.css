@@ -150,6 +150,36 @@ body {
   }
 }
 
+/* ===== Print / Export (A4/Letter friendly) ===== */
+@media print {
+  /* White paper background */
+  html, body { background: #fff !important; color: #111 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* Hide app chrome */
+  header, nav, .sticky, .no-print, .card-surface .no-print { display: none !important; }
+  /* Remove gradients/shadows, keep borders */
+  .card-surface { background: #fff !important; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+
+  /* Links become plain text */
+  a { color: #111 !important; text-decoration: none !important; }
+
+  /* Tables readable on paper */
+  table { width: 100% !important; border-collapse: collapse !important; font-size: 12px !important; }
+  th, td { border: 1px solid #e5e7eb !important; padding: 6px 8px !important; }
+  th { background: #f3f4f6 !important; color: #111 !important; }
+
+  /* Page layout */
+  @page { size: auto; margin: 16mm; } /* works for both A4/Letter */
+  .page-break { page-break-before: always; }
+  .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Charts: increase contrast */
+  .chart-container { background: #fff !important; }
+
+  /* Tighten spacing for print */
+  .print-compact * { line-height: 1.25 !important; }
+}
+
 @layer base {
   * {
     @apply border-border;
