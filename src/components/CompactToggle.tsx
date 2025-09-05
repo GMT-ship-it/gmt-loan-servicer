@@ -17,7 +17,8 @@ export default function CompactToggle() {
   return (
     <label className="text-xs text-neutral-300 flex items-center gap-2 cursor-pointer">
       <input 
-        type="checkbox" 
+        type="checkbox"
+        aria-label="Toggle compact mode"
         checked={on} 
         onChange={e => setOn(e.target.checked)}
         className="w-3 h-3" 

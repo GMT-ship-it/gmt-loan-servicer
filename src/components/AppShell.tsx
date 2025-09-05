@@ -13,14 +13,18 @@ function BellMenu() {
   return (
     <div className="relative">
       <Button
+        aria-label="Open notifications"
         variant="ghost"
         className="relative text-neutral-300 hover:text-white"
         onClick={() => setOpen(o => !o)}
         title="Notifications"
       >
-        <Bell className="h-5 w-5" />
+        <Bell aria-hidden="true" className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none px-1.5 py-1 rounded-full">
+          <span
+            aria-label={`${unreadCount} unread notifications`}
+            className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] leading-none px-1.5 py-1 rounded-full"
+          >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -72,29 +76,41 @@ export default function AppShell() {
   ];
   return (
     <NotificationsProvider>
+      {/* Skip link for keyboard/screen readers */}
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-black text-white px-3 py-1 rounded">
+        Skip to content
+      </a>
+
       <div className="min-h-screen">
-      <header className="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
-            SummitLine
-          </Link>
-          <nav className="hidden md:flex items-center gap-6 text-sm text-neutral-300">
-            {tabs.map(t => (
-              <Link key={t.to} to={t.to}
-                className={`hover:text-white ${pathname.startsWith(t.to) ? 'text-white font-semibold' : ''}`}>
-                {t.label}
-              </Link>
-            ))}
-          </nav>
+        <header className="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent">
+          <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+            <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
+              SummitLine
+            </Link>
+            <nav className="hidden md:flex items-center gap-6 text-sm text-neutral-300" aria-label="Primary">
+              {tabs.map(t => {
+                const active = pathname.startsWith(t.to);
+                return (
+                  <Link
+                    key={t.to}
+                    to={t.to}
+                    aria-current={active ? 'page' : undefined}
+                    className={`hover:text-white ${active ? 'text-white font-semibold' : ''}`}
+                  >
+                    {t.label}
+                  </Link>
+                );
+              })}
+            </nav>
           <div className="flex items-center gap-3">
             <CompactToggle />
             <BellMenu />
           </div>
         </div>
-      </header>
-      <main className="mx-auto max-w-7xl px-4 pb-16">
-        <Outlet />
-      </main>
+        </header>
+        <main id="main" role="main" className="mx-auto max-w-7xl px-4 pb-16">
+          <Outlet />
+        </main>
       <CommandPalette />
     </div>
     </NotificationsProvider>

@@ -620,6 +620,7 @@ export default function AdminPage() {
               {/* Actions */}
               <div className="mt-4 flex gap-2">
                 <Button
+                  aria-label={`Approve draw request ${d.id.slice(0,8)}`}
                   variant="outline"
                   disabled={
                     d.status === 'approved' ||
@@ -645,6 +646,7 @@ export default function AdminPage() {
                   {decidingId === d.id ? 'Saving…' : 'Approve'}
                 </Button>
                 <Button
+                  aria-label={`Reject draw request ${d.id.slice(0,8)}`}
                   variant="outline"
                   disabled={d.status === 'rejected' || decidingId === d.id}
                   onClick={() => decideDraw(d.id, 'rejected')}
@@ -681,6 +683,7 @@ export default function AdminPage() {
 
               <div className="mt-4 flex gap-2">
                 <Button
+                  aria-label={`Approve BBC report ${r.id.slice(0,8)}`}
                   variant="outline"
                   onClick={() => approveBBC(r.id)}
                   className="border-white/20 hover:bg-white/5 text-white"
@@ -873,13 +876,13 @@ export default function AdminPage() {
           <table>
             <thead>
               <tr>
-                <th>Customer</th>
-                <th>Limit</th>
-                <th>Outstanding</th>
-                <th>Utilization %</th>
-                <th>Available</th>
-                <th>BBC Fresh</th>
-                <th>Last Draw</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Limit</th>
+                <th scope="col">Outstanding</th>
+                <th scope="col">Utilization %</th>
+                <th scope="col">Available</th>
+                <th scope="col">BBC Fresh</th>
+                <th scope="col">Last Draw</th>
               </tr>
             </thead>
             <tbody>
@@ -904,11 +907,11 @@ export default function AdminPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Customer</th>
-                  <th>Amount</th>
-                  <th>Docs</th>
-                  <th>BBC</th>
-                  <th>Submitted</th>
+                  <th scope="col">Customer</th>
+                  <th scope="col">Amount</th>
+                  <th scope="col">Docs</th>
+                  <th scope="col">BBC</th>
+                  <th scope="col">Submitted</th>
                 </tr>
               </thead>
               <tbody>

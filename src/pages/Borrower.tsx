@@ -772,10 +772,10 @@ export default function BorrowerPage() {
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Memo</th>
-                <th style={{textAlign:'right'}}>Amount</th>
+                <th scope="col">Date</th>
+                <th scope="col">Type</th>
+                <th scope="col">Memo</th>
+                <th scope="col" style={{textAlign:'right'}}>Amount</th>
               </tr>
             </thead>
             <tbody>

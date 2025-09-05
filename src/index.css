@@ -140,6 +140,27 @@ body {
 :root.compact .compact-gap { gap: 0.5rem !important; }
 :root.compact .text-sm-compact { font-size: 0.9rem !important; }
 
+/* Visible focus rings on dark UI */
+:focus-visible {
+  outline: 2px solid #E50914;
+  outline-offset: 2px;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, [role="button"]:focus-visible {
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, .6);
+}
+
+/* Screen-reader-only helper */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Respect OS high-contrast settings */
+@media (prefers-contrast: more) {
+  .card-surface { border-color: rgba(255,255,255,0.35) !important; }
+  :focus-visible { outline-width: 3px; }
+}
+
 /* Reduced motion accessibility */
 @media (prefers-reduced-motion: reduce) {
   * {

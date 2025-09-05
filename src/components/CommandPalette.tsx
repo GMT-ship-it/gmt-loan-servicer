@@ -104,21 +104,21 @@ export default function CommandPalette() {
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search…" />
-      <CommandList>
+    <CommandDialog open={open} onOpenChange={setOpen} aria-label="Command palette">
+      <CommandInput placeholder="Type a command or search…" aria-label="Command input" />
+      <CommandList role="listbox">
         <CommandEmpty>No results.</CommandEmpty>
 
         <CommandGroup heading="Navigate">
-          <CommandItem onSelect={() => go("/borrower")}>
+          <CommandItem role="option" aria-label="Go to Borrower" onSelect={() => go("/borrower")}>
             Borrower
             <CommandShortcut>G → B</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => go("/admin")}>
+          <CommandItem role="option" aria-label="Go to Admin" onSelect={() => go("/admin")}>
             Admin
             <CommandShortcut>G → A</CommandShortcut>
           </CommandItem>
-          <CommandItem onSelect={() => go("/analytics")}>
+          <CommandItem role="option" aria-label="Go to Analytics" onSelect={() => go("/analytics")}>
             Analytics
             <CommandShortcut>G → N</CommandShortcut>
           </CommandItem>
