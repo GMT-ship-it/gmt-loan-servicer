@@ -18,6 +18,8 @@ import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 import type { Facility } from '@/types/facility';
+import Sparkline from '@/components/charts/Sparkline';
+import { darkAxis, gridStroke, tooltipStyle } from '@/components/charts/theme';
 
 type Customer = { id: string; legal_name: string; };
 type FacilityRow = { id: string; customer_id: string; };
@@ -712,24 +714,31 @@ export default function AdminPage() {
             No facilities found
           </div>
         ) : (
-          exposure
+           exposure
             .slice() // copy
             .sort((a: any, b: any) => Number(b.utilization_pct) - Number(a.utilization_pct))
-            .map((r: any) => (
-              <div key={r.facility_id} className="min-w-[360px] snap-start card-surface p-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-base font-semibold">{r.customer_name}</div>
-                  <Chip text={fmtPct(r.utilization_pct)} tone={utilTone(Number(r.utilization_pct || 0))} />
+            .map((r: any) => {
+              // Mock utilization series (8 data points) - replace with real data if available
+              const series = r.utilization_series 
+                ?? Array.from({length:8}).map((_,i)=>({ v: Math.max(0, Math.min(100, Number(r.utilization_pct) + (i-4)*0.8)) }));
+              
+              return (
+                <div key={r.facility_id} className="min-w-[360px] snap-start card-surface p-4 compact-p">
+                  <div className="flex items-center justify-between">
+                    <div className="text-base font-semibold">{r.customer_name}</div>
+                    <Chip text={fmtPct(r.utilization_pct)} tone={utilTone(Number(r.utilization_pct || 0))} />
+                  </div>
+                  <div className="text-sm text-neutral-400 mt-1">
+                    Limit {money(r.credit_limit)} • Outst {money(r.principal_outstanding)} • Avail {money(r.available_to_draw)}
+                  </div>
+                  <div className="mt-3"><Sparkline data={series} /></div>
+                  <div className="text-xs text-neutral-500 mt-2">
+                    BBC {r.bbc_approved_within_45d ? 'fresh' : 'stale'}
+                    {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
+                  </div>
                 </div>
-                <div className="text-sm text-neutral-400 mt-1">
-                  Limit {money(r.credit_limit)} • Outst {money(r.principal_outstanding)} • Avail {money(r.available_to_draw)}
-                </div>
-                <div className="text-xs text-neutral-500 mt-2">
-                  BBC {r.bbc_approved_within_45d ? 'fresh' : 'stale'}
-                  {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
-                </div>
-              </div>
-            ))
+              );
+            })
         )}
       </Row>
 
@@ -768,20 +777,16 @@ export default function AdminPage() {
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={portfolioAgg}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="sector" stroke="#ffffff" />
-                  <YAxis stroke="#ffffff" />
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis dataKey="sector" tickLine={false} axisLine={{ stroke: darkAxis.stroke }} tick={darkAxis.tick as any} />
+                  <YAxis tickLine={false} axisLine={{ stroke: darkAxis.stroke }} tick={darkAxis.tick as any} />
                   <Tooltip 
+                    contentStyle={tooltipStyle as any}
+                    labelStyle={{ color: 'rgba(255,255,255,0.8)' }}
                     formatter={(value: any, name: string) => [
                       `$${Number(value).toLocaleString()}`, 
                       name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
                     ]}
-                    contentStyle={{
-                      backgroundColor: 'rgba(0,0,0,0.9)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
-                      color: '#ffffff'
-                    }}
                   />
                   <Bar dataKey="principal_outstanding" name="Outstanding" fill="#ffffff" />
                   <Bar dataKey="credit_limit" name="Credit Limit" fill="rgba(255,255,255,0.4)" />
@@ -816,25 +821,22 @@ export default function AdminPage() {
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={timeSeries}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="d" stroke="#ffffff" />
-                  <YAxis stroke="#ffffff" />
+                  <CartesianGrid stroke={gridStroke} vertical={false} />
+                  <XAxis dataKey="d" tickLine={false} axisLine={{ stroke: darkAxis.stroke }} tick={darkAxis.tick as any} />
+                  <YAxis tickLine={false} axisLine={{ stroke: darkAxis.stroke }} tick={darkAxis.tick as any} domain={[0, 100]} />
                   <Tooltip 
+                    contentStyle={tooltipStyle as any}
+                    labelStyle={{ color: 'rgba(255,255,255,0.8)' }}
                     formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Utilization']}
                     labelFormatter={(label) => `Date: ${label}`}
-                    contentStyle={{
-                      backgroundColor: 'rgba(0,0,0,0.9)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: '8px',
-                      color: '#ffffff'
-                    }}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="utilization_pct" 
                     name="Utilization %" 
-                    stroke="#ffffff"
+                    stroke="#E50914"
                     strokeWidth={2}
+                    dot={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
