@@ -152,7 +152,7 @@ export default function AdminPage() {
 
   const loadPortfolioAgg = async () => {
     try {
-      const { data, error } = await supabase.from('portfolio_aggregates').select('*');
+      const { data, error } = await supabase.rpc('get_portfolio_aggregates');
       if (error) throw error;
       setPortfolioAgg(data || []);
     } catch (error) {

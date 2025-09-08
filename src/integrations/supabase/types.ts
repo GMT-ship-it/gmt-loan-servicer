@@ -469,16 +469,7 @@ export type Database = {
       }
     }
     Views: {
-      portfolio_aggregates: {
-        Row: {
-          credit_limit: number | null
-          facilities: number | null
-          principal_outstanding: number | null
-          region: string | null
-          sector: Database["public"]["Enums"]["industry_sector"] | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       facility_accrued_interest: {
@@ -506,6 +497,16 @@ export type Database = {
         Returns: {
           facility_id: string
           principal_outstanding: number
+        }[]
+      }
+      get_portfolio_aggregates: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          credit_limit: number
+          facilities: number
+          principal_outstanding: number
+          region: string
+          sector: Database["public"]["Enums"]["industry_sector"]
         }[]
       }
       is_borrower: {
