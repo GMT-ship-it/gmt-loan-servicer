@@ -16,6 +16,7 @@ import { MotionRow as Row } from '@/components/MotionRow';
 import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
+import CovenantChip from '@/components/admin/CovenantChip';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 import type { Facility } from '@/types/facility';
 import Sparkline from '@/components/charts/Sparkline';
@@ -127,6 +128,7 @@ export default function AdminPage() {
   // Compliance and Analytics state
   const [breaches, setBreaches] = useState<any[]>([]);
   const [portfolioAgg, setPortfolioAgg] = useState<any[]>([]);
+  const [covenantBreaches, setCovenantBreaches] = useState<Record<string, { open: number; total: number }>>({});
   const [timeSeries, setTimeSeries] = useState<any[]>([]);
   const [timeSeriesFacility, setTimeSeriesFacility] = useState('');
   const [breachesLoading, setBreachesLoading] = useState(false);
@@ -179,9 +181,26 @@ export default function AdminPage() {
 
   const loadExposure = async () => {
     setLoadingExposure(true);
-    const { data, error } = await supabase.rpc('lender_exposure_snapshot');
+    try {
+      const [exposureRes, breachRes] = await Promise.all([
+        supabase.rpc('lender_exposure_snapshot'),
+        supabase.from('covenant_breaches').select('facility_id, status').in('status', ['open', 'acknowledged', 'waived'])
+      ]);
+      
+      if (!exposureRes.error) setExposure(exposureRes.data || []);
+      
+      // Group breach counts by facility
+      const breachCounts: Record<string, { open: number; total: number }> = {};
+      (breachRes.data || []).forEach((b: any) => {
+        if (!breachCounts[b.facility_id]) breachCounts[b.facility_id] = { open: 0, total: 0 };
+        breachCounts[b.facility_id].total++;
+        if (b.status === 'open') breachCounts[b.facility_id].open++;
+      });
+      setCovenantBreaches(breachCounts);
+    } catch (error) {
+      console.error('Error loading exposure:', error);
+    }
     setLoadingExposure(false);
-    if (!error) setExposure(data || []);
   };
 
   const loadBBCReviews = async () => {
@@ -742,9 +761,17 @@ export default function AdminPage() {
                     Limit {money(r.credit_limit)} • Outst {money(r.principal_outstanding)} • Avail {money(r.available_to_draw)}
                   </div>
                   <div className="mt-3"><Sparkline data={series} /></div>
-                  <div className="text-xs text-neutral-500 mt-2">
-                    BBC {r.bbc_approved_within_45d ? 'fresh' : 'stale'}
-                    {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
+                  <div className="text-xs text-neutral-500 mt-2 flex items-center justify-between">
+                    <span>
+                      BBC {r.bbc_approved_within_45d ? 'fresh' : 'stale'}
+                      {r.last_draw_decided_at ? ` • Last draw ${new Date(r.last_draw_decided_at).toLocaleString()}` : ''}
+                    </span>
+                    {(() => {
+                      const breachData = covenantBreaches[r.facility_id];
+                      if (!breachData) return <CovenantChip state="ok">Compliant</CovenantChip>;
+                      const state = breachData.open > 0 ? 'bad' : 'warn';
+                      return <CovenantChip state={state}>{breachData.open > 0 ? 'Breached' : 'Attention'}</CovenantChip>;
+                    })()}
                   </div>
                 </div>
               );
