@@ -156,6 +156,57 @@ export type Database = {
           },
         ]
       }
+      covenant_breaches: {
+        Row: {
+          acknowledged_by: string | null
+          cleared_by: string | null
+          closed_at: string | null
+          covenant_id: string | null
+          created_at: string
+          facility_id: string
+          id: string
+          kind: string
+          notes: string | null
+          observed_value: number
+          opened_at: string
+          status: string
+          threshold_value: number
+          waived_by: string | null
+        }
+        Insert: {
+          acknowledged_by?: string | null
+          cleared_by?: string | null
+          closed_at?: string | null
+          covenant_id?: string | null
+          created_at?: string
+          facility_id: string
+          id?: string
+          kind: string
+          notes?: string | null
+          observed_value: number
+          opened_at?: string
+          status?: string
+          threshold_value: number
+          waived_by?: string | null
+        }
+        Update: {
+          acknowledged_by?: string | null
+          cleared_by?: string | null
+          closed_at?: string | null
+          covenant_id?: string | null
+          created_at?: string
+          facility_id?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          observed_value?: number
+          opened_at?: string
+          status?: string
+          threshold_value?: number
+          waived_by?: string | null
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
@@ -323,34 +374,46 @@ export type Database = {
           bbc_valid_days: number
           created_at: string
           facility_id: string
+          id: string
+          is_active: boolean | null
+          kind: string | null
           max_utilization_pct: number
           require_monthly_bbc: boolean
           require_monthly_statement: boolean
+          threshold: number | null
           updated_at: string
         }
         Insert: {
           bbc_valid_days?: number
           created_at?: string
           facility_id: string
+          id?: string
+          is_active?: boolean | null
+          kind?: string | null
           max_utilization_pct?: number
           require_monthly_bbc?: boolean
           require_monthly_statement?: boolean
+          threshold?: number | null
           updated_at?: string
         }
         Update: {
           bbc_valid_days?: number
           created_at?: string
           facility_id?: string
+          id?: string
+          is_active?: boolean | null
+          kind?: string | null
           max_utilization_pct?: number
           require_monthly_bbc?: boolean
           require_monthly_statement?: boolean
+          threshold?: number | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "facility_covenants_facility_id_fkey"
             columns: ["facility_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "facilities"
             referencedColumns: ["id"]
           },
@@ -472,11 +535,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      evaluate_covenants: {
+        Args: { p_facility: string }
+        Returns: undefined
+      }
       facility_accrued_interest: {
         Args: { p_as_of?: string; p_facility: string }
         Returns: number
       }
       facility_available_to_draw: {
+        Args: { p_facility: string }
+        Returns: number
+      }
+      facility_bbc_age_days: {
         Args: { p_facility: string }
         Returns: number
       }
@@ -491,6 +562,10 @@ export type Database = {
           message: string
           severity: string
         }[]
+      }
+      facility_utilization_pct: {
+        Args: { p_facility: string }
+        Returns: number
       }
       get_facility_principal: {
         Args: { p_facility_id?: string }
