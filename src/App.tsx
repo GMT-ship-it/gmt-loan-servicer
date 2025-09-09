@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Portal from "./pages/Portal";
 import Admin from "./pages/Admin";
+import AdminCovenants from "./pages/AdminCovenants";
 import Borrower from "./pages/Borrower";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/portal" element={<Portal />} />
           <Route element={<AppShell />}>
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/covenants" element={<AdminCovenants />} />
             <Route path="/borrower" element={<Borrower />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

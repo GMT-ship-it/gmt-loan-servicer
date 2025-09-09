@@ -533,6 +533,13 @@ export default function AdminPage() {
             <div className="mt-4 flex gap-3 flex-wrap">
               <Button onClick={loadExposure} className="bg-white text-black hover:bg-white/90 w-full sm:w-auto">Refresh Exposure</Button>
               <Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white w-full sm:w-auto">Load Audit</Button>
+              <Button 
+                variant="outline" 
+                className="border-white/20 text-white hover:bg-white/5 w-full sm:w-auto"
+                onClick={() => navigate('/admin/covenants')}
+              >
+                Manage Covenants
+              </Button>
             </div>
           </div>
         </div>
