@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CompactToggle from '@/components/CompactToggle';
+import ThemeToggle from '@/components/ThemeToggle';
 import { NotificationsProvider, useNotifications } from '@/contexts/NotificationsContext';
 import CommandPalette from '@/components/CommandPalette';
 
@@ -103,6 +104,7 @@ export default function AppShell() {
               })}
             </nav>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <CompactToggle />
             <BellMenu />
           </div>
