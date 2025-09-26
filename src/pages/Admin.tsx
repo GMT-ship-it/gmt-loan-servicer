@@ -643,44 +643,99 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="mt-4 flex gap-2">
-                <Button
-                  aria-label={`Approve draw request ${d.id.slice(0,8)}`}
-                  variant="outline"
-                  disabled={
-                    d.status === 'approved' ||
-                    !complianceByDraw?.[d.id]?.docsOk ||
-                    !complianceByDraw?.[d.id]?.bbcOk ||
-                    !complianceByDraw?.[d.id]?.limitOk ||
-                    decidingId === d.id
-                  }
-                  onClick={() => decideDraw(d.id, 'approved')}
-                  className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]"
-                  title={
-                    !complianceByDraw?.[d.id]
-                      ? 'Checking…'
-                      : !complianceByDraw[d.id].docsOk
-                      ? 'Docs not OK'
-                      : !complianceByDraw[d.id].bbcOk
-                      ? 'BBC not fresh'
-                      : !complianceByDraw[d.id].limitOk
-                      ? 'Exceeds availability'
-                      : undefined
-                  }
-                >
-                  {decidingId === d.id ? 'Saving…' : 'Approve'}
-                </Button>
-                <Button
-                  aria-label={`Reject draw request ${d.id.slice(0,8)}`}
-                  variant="outline"
-                  disabled={d.status === 'rejected' || decidingId === d.id}
-                  onClick={() => decideDraw(d.id, 'rejected')}
-                  className="border-white/20 hover:bg-white/5 text-white"
-                >
-                  Reject
-                </Button>
-              </div>
+               {/* Documents Section */}
+               {docsByDraw[d.id] && docsByDraw[d.id].length > 0 && (
+                 <div className="mt-4 border-t border-[var(--card-border)] pt-3">
+                   <h4 className="text-sm font-medium text-white mb-2">Supporting Documents</h4>
+                   <div className="space-y-2">
+                     {docsByDraw[d.id].map((doc: any) => (
+                       <div key={doc.id} className="flex items-center justify-between p-2 bg-[var(--surface)] rounded border border-[var(--card-border)]">
+                         <div>
+                           <div className="text-sm text-white">{doc.original_name}</div>
+                           <div className="text-xs text-neutral-400">
+                             {doc.size_bytes ? `${(doc.size_bytes / 1024).toFixed(1)} KB` : ''} • {new Date(doc.uploaded_at).toLocaleDateString()}
+                           </div>
+                         </div>
+                         <Button
+                           variant="outline"
+                           size="sm"
+                           onClick={async () => {
+                             const url = await getSignedUrl(doc.path);
+                             if (url) window.open(url, '_blank');
+                           }}
+                           className="text-xs border-[var(--card-border)] text-white hover:bg-[var(--surface-2)]"
+                         >
+                           View
+                         </Button>
+                       </div>
+                     ))}
+                   </div>
+                   
+                   {/* Docs OK Toggle */}
+                   <div className="flex items-center justify-between mt-3 p-2 bg-[var(--surface)] rounded">
+                     <span className="text-sm text-white">Documents Status:</span>
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       disabled={togglingDocsOk === d.id}
+                       onClick={() => toggleDocsOk(d.id, !d.required_docs_ok)}
+                       className={`text-xs ${
+                         d.required_docs_ok 
+                           ? 'border-green-500 text-green-400 hover:bg-green-500/10' 
+                           : 'border-red-500 text-red-400 hover:bg-red-500/10'
+                       }`}
+                     >
+                       {togglingDocsOk === d.id ? 'Updating...' : d.required_docs_ok ? 'Docs OK ✓' : 'Mark Docs OK'}
+                     </Button>
+                   </div>
+                 </div>
+               )}
+
+               {/* Compliance Status */}
+               {!complianceByDraw?.[d.id]?.docsOk && (
+                 <div className="mt-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-400">
+                   Approval requires Borrowing Base compliance and all required documents.
+                 </div>
+               )}
+
+               {/* Actions */}
+               <div className="mt-4 flex gap-2">
+                 <Button
+                   aria-label={`Approve draw request ${d.id.slice(0,8)}`}
+                   variant="outline"
+                   disabled={
+                     d.status === 'approved' ||
+                     !complianceByDraw?.[d.id]?.docsOk ||
+                     !complianceByDraw?.[d.id]?.bbcOk ||
+                     !complianceByDraw?.[d.id]?.limitOk ||
+                     decidingId === d.id
+                   }
+                   onClick={() => decideDraw(d.id, 'approved')}
+                   className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]"
+                   title={
+                     !complianceByDraw?.[d.id]
+                       ? 'Checking…'
+                       : !complianceByDraw[d.id].docsOk
+                       ? 'Docs not OK'
+                       : !complianceByDraw[d.id].bbcOk
+                       ? 'BBC not fresh'
+                       : !complianceByDraw[d.id].limitOk
+                       ? 'Exceeds availability'
+                       : undefined
+                   }
+                 >
+                   {decidingId === d.id ? 'Saving…' : 'Approve'}
+                 </Button>
+                 <Button
+                   aria-label={`Reject draw request ${d.id.slice(0,8)}`}
+                   variant="outline"
+                   disabled={d.status === 'rejected' || decidingId === d.id}
+                   onClick={() => decideDraw(d.id, 'rejected')}
+                   className="border-white/20 hover:bg-white/5 text-white"
+                 >
+                   Reject
+                 </Button>
+               </div>
             </div>
           ))
         )}

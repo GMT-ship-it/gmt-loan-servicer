@@ -641,14 +641,24 @@ export default function BorrowerPage() {
               >
                 Request Funds
               </Button>
-              <Button
-                variant="outline"
-                onClick={downloadStatementPdf}
-                disabled={stmtLoading}
-                className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)] w-full sm:w-auto"
-              >
-                {stmtLoading ? 'Generating…' : 'Download Statement'}
-              </Button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="month"
+                  value={stmtMonth}
+                  onChange={(e) => setStmtMonth(e.target.value)}
+                  className="px-3 py-2 bg-[var(--surface)] border border-[var(--card-border)] rounded text-white text-sm"
+                  aria-label="Statement month"
+                />
+                <Button
+                  variant="outline"
+                  onClick={downloadStatementPdf}
+                  disabled={stmtLoading}
+                  className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]"
+                  aria-label="Download monthly statement PDF"
+                >
+                  {stmtLoading ? 'Generating…' : 'Download Statement (PDF)'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -727,6 +737,118 @@ export default function BorrowerPage() {
           ))
         )}
       </Row>
+
+      {/* Draw Request Form Section */}
+      <div data-section="draw-request" className="mt-8">
+        <Card className="border-[var(--card-border)] bg-[var(--surface-2)]">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center justify-between">
+              Request Funds
+              {activeDrawId && (
+                <span className="text-sm font-normal text-neutral-300">
+                  Attaching to pending request: {money(draws.find(d => d.id === activeDrawId)?.amount || 0)} on {draws.find(d => d.id === activeDrawId) ? new Date(draws.find(d => d.id === activeDrawId)!.created_at).toLocaleDateString() : ''}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form onSubmit={submitDraw} className="space-y-4">
+              <div>
+                <label htmlFor="amount" className="text-sm font-medium text-white mb-2 block">
+                  Amount to Request
+                </label>
+                <input
+                  id="amount"
+                  type="number"
+                  value={drawAmount}
+                  onChange={(e) => setDrawAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--card-border)] rounded text-white placeholder:text-muted"
+                  placeholder="Enter amount"
+                />
+                {getAmountError() && (
+                  <p className="text-sm text-red-400 mt-1">{getAmountError()}</p>
+                )}
+              </div>
+              
+              <div>
+                <label htmlFor="memo" className="text-sm font-medium text-white mb-2 block">
+                  Purpose (Optional)
+                </label>
+                <input
+                  id="memo"
+                  type="text"
+                  value={drawMemo}
+                  onChange={(e) => setDrawMemo(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--card-border)] rounded text-white placeholder:text-muted"
+                  placeholder="e.g., Working capital"
+                />
+              </div>
+              
+              <Button
+                type="submit"
+                disabled={postingDraw || invalidAmt}
+                className="w-full bg-white text-black hover:bg-white/90"
+              >
+                {postingDraw ? 'Submitting...' : 'Submit Draw Request'}
+              </Button>
+            </form>
+
+            {/* Document Upload Section */}
+            {activeDrawId && (
+              <div className="border-t border-[var(--card-border)] pt-4">
+                <h3 className="text-white font-medium mb-3">Upload Supporting Documents</h3>
+                <form onSubmit={uploadDocs} className="space-y-3">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg"
+                    onChange={(e) => setFilesToUpload(e.target.files)}
+                    className="w-full text-white file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-white file:text-black hover:file:bg-white/90"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={uploading || !filesToUpload?.length}
+                    variant="outline"
+                    className="w-full border-[var(--card-border)] text-white hover:bg-[var(--surface-2)]"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Files'}
+                  </Button>
+                </form>
+
+                {/* Show uploaded documents */}
+                {docs.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-white mb-2">Uploaded Documents</h4>
+                    <div className="space-y-2">
+                      {docs.map((doc) => (
+                        <div key={doc.id} className="flex items-center justify-between p-2 bg-[var(--surface)] rounded border border-[var(--card-border)]">
+                          <div>
+                            <div className="text-sm text-white">{doc.original_name}</div>
+                            <div className="text-xs text-neutral-400">
+                              {doc.size_bytes ? `${(doc.size_bytes / 1024).toFixed(1)} KB` : ''} • {new Date(doc.uploaded_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const url = await getSignedUrl(doc.path);
+                              if (url) window.open(url, '_blank');
+                            }}
+                            className="text-xs border-[var(--card-border)] text-white hover:bg-[var(--surface-2)]"
+                          >
+                            Download
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Row: BBC reports */}
       <Row title="Borrowing Base Certificates">
