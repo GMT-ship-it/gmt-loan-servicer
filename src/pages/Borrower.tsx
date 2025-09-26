@@ -645,7 +645,7 @@ export default function BorrowerPage() {
                 variant="outline"
                 onClick={downloadStatementPdf}
                 disabled={stmtLoading}
-                className="border-white/20 hover:bg-white/5 text-white w-full sm:w-auto"
+                className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)] w-full sm:w-auto"
               >
                 {stmtLoading ? 'Generating…' : 'Download Statement'}
               </Button>
@@ -702,7 +702,7 @@ export default function BorrowerPage() {
       {/* Row: Draw requests */}
       <Row
         title="Draw Requests"
-        action={<button className="text-sm text-neutral-300 hover:text-white">View all</button>}
+        action={<button className="text-sm text-muted hover:opacity-80">View all</button>}
       >
         {loadingDraws ? (
           Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)

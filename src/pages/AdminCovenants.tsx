@@ -218,7 +218,7 @@ export default function AdminCovenants() {
         </div>
         <div className="flex gap-2">
           <Button
-            className="bg-[#E50914] text-white hover:opacity-90"
+            className="btn-accent hover:opacity-90"
             onClick={evaluateNow}
             disabled={!selected || loadingEval}
             aria-label="Re-evaluate covenants now"
@@ -229,7 +229,7 @@ export default function AdminCovenants() {
       </div>
 
       {/* Facility selector */}
-      <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-lg p-4 mb-4">
+      <div className="bg-[var(--bg-muted)] backdrop-blur-sm border border-[var(--card-border)] rounded-lg p-4 mb-4">
         <label htmlFor="facSel" className="text-sm">Facility</label>
         <select
           id="facSel"
@@ -238,7 +238,7 @@ export default function AdminCovenants() {
           onChange={(e) => setSelected(e.target.value || null)}
         >
           {facilities.map(f => (
-            <option key={f.id} value={f.id} className="bg-black">
+            <option key={f.id} value={f.id} className="bg-[var(--bg)]">
               {f.customer_name} — {money(f.credit_limit)}
             </option>
           ))}
@@ -261,11 +261,11 @@ export default function AdminCovenants() {
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold">Rules</h2>
           <div className="flex gap-2">
-            <Button variant="outline" className="border-white/20 text-white hover:bg-white/5"
+            <Button variant="outline" className="border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--surface-2)]"
               onClick={() => addCovenant('max_utilization_pct')}>
               + Max Utilization %
             </Button>
-            <Button variant="outline" className="border-white/20 text-white hover:bg-white/5"
+            <Button variant="outline" className="border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--surface-2)]"
               onClick={() => addCovenant('bbc_max_age_days')}>
               + BBC Max Age
             </Button>
@@ -278,7 +278,7 @@ export default function AdminCovenants() {
               key={c.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-lg p-4"
+              className="bg-[var(--bg-muted)] backdrop-blur-sm border border-[var(--card-border)] rounded-lg p-4"
             >
               <div className="text-sm text-neutral-400">{prettyKind(c.kind)}</div>
               <div className="mt-2 flex items-center gap-3">
@@ -314,7 +314,7 @@ export default function AdminCovenants() {
                 <Button
                   onClick={() => upsertCovenant(c)}
                   disabled={savingId === c.id}
-                  className="bg-[#E50914] text-white hover:opacity-90"
+                  className="btn-accent hover:opacity-90"
                 >
                   {savingId === c.id ? 'Saving…' : 'Save'}
                 </Button>
@@ -323,7 +323,7 @@ export default function AdminCovenants() {
           ))}
 
           {!covs.length && !loading && (
-            <div className="bg-black/40 backdrop-blur-sm border border-white/10 rounded-lg p-6 text-center text-neutral-400">
+            <div className="bg-[var(--bg-muted)] backdrop-blur-sm border border-[var(--card-border)] rounded-lg p-6 text-center text-muted">
               No covenants yet. Add a rule above.
             </div>
           )}

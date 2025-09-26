@@ -551,10 +551,10 @@ export default function AdminPage() {
             <p className="text-neutral-300 mt-2">Approvals, exposure & compliance at a glance</p>
             <div className="mt-4 flex gap-3 flex-wrap">
               <Button onClick={loadExposure} className="bg-white text-black hover:bg-white/90 w-full sm:w-auto">Refresh Exposure</Button>
-              <Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white w-full sm:w-auto">Load Audit</Button>
+              <Button variant="outline" onClick={loadAudit} className="border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--surface-2)] w-full sm:w-auto">Load Audit</Button>
               <Button 
                 variant="outline" 
-                className="border-white/20 text-white hover:bg-white/5 w-full sm:w-auto"
+                className="border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--surface-2)] w-full sm:w-auto"
                 onClick={() => navigate('/admin/covenants')}
               >
                 Manage Covenants
@@ -656,7 +656,7 @@ export default function AdminPage() {
                     decidingId === d.id
                   }
                   onClick={() => decideDraw(d.id, 'approved')}
-                  className="border-white/20 hover:bg-white/5 text-white"
+                  className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]"
                   title={
                     !complianceByDraw?.[d.id]
                       ? 'Checking…'
@@ -734,7 +734,7 @@ export default function AdminPage() {
       {/* Exposure */}
       <Row
         title="Exposure (Top Utilization)"
-        action={<Button variant="outline" onClick={loadExposure} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+        action={<Button variant="outline" onClick={loadExposure} className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]">Refresh</Button>}
       >
         {loadingExposure ? (
           Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
@@ -782,7 +782,7 @@ export default function AdminPage() {
       {/* Audit (last actions) */}
       <Row
         title="Recent Audit"
-        action={<Button variant="outline" onClick={loadAudit} className="border-white/20 hover:bg-white/5 text-white">Refresh</Button>}
+        action={<Button variant="outline" onClick={loadAudit} className="border-[var(--card-border)] hover:bg-[var(--surface-2)] text-[var(--text)]">Refresh</Button>}
       >
         {loadingAudit ? (
           Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
@@ -808,7 +808,7 @@ export default function AdminPage() {
         <Row title="Analytics">
           <div className="min-w-[500px] card-surface p-6 chart-container">
             <div className="mb-4">
-              <h3 className="text-lg font-semibold text-white">Portfolio by Sector/Region</h3>
+              <h3 className="text-lg font-semibold">Portfolio by Sector/Region</h3>
               <p className="text-sm text-neutral-300">Outstanding balances and credit limits by industry sector</p>
             </div>
             <div className="h-80">
@@ -835,7 +835,7 @@ export default function AdminPage() {
           <div className="min-w-[500px] card-surface p-6 chart-container">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-white">Utilization Trend (90 days)</h3>
+                <h3 className="text-lg font-semibold">Utilization Trend (90 days)</h3>
                 <p className="text-sm text-neutral-300">Track facility utilization over time</p>
               </div>
               <div className="flex items-center gap-2 no-print">
@@ -843,7 +843,7 @@ export default function AdminPage() {
                   placeholder="Enter Facility ID"
                   value={timeSeriesFacility}
                   onChange={(e) => setTimeSeriesFacility(e.target.value)}
-                  className="w-72 font-mono text-sm bg-white/5 border-white/20 text-white placeholder:text-neutral-400"
+                  className="w-72 font-mono text-sm bg-[var(--surface)] border-[var(--card-border)] placeholder:text-muted"
                 />
                 <Button 
                   variant="outline" 

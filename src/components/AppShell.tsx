@@ -78,14 +78,14 @@ export default function AppShell() {
   return (
     <NotificationsProvider>
       {/* Skip link for keyboard/screen readers */}
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-black text-white px-3 py-1 rounded">
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-[var(--bg)] px-3 py-1 rounded">
         Skip to content
       </a>
 
       <div className="min-h-screen">
         <header className="sticky top-0 z-40 app-header">
           <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-            <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
+            <Link to="/" className="text-2xl font-extrabold tracking-tight">
               SummitLine
             </Link>
             <nav className="hidden md:flex items-center gap-6 text-sm text-muted" aria-label="Primary">
@@ -96,7 +96,7 @@ export default function AppShell() {
                     key={t.to}
                     to={t.to}
                     aria-current={active ? 'page' : undefined}
-                    className={`hover:text-white ${active ? 'text-white font-semibold' : ''}`}
+                    className={`hover:opacity-80 ${active ? 'font-semibold' : ''}`}
                   >
                     {t.label}
                   </Link>

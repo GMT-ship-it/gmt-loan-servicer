@@ -17,14 +17,14 @@ const Index = () => {
       />
       
       {/* Dark overlay for text readability */}
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-[var(--bg)]/40" />
       
       {/* Content */}
       <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
         <div className="text-center space-y-8 max-w-2xl">
           {/* Mountain Investments Logo/Brand */}
           <div className="mb-8">
-            <h1 className="text-5xl md:text-6xl font-bold text-white mb-2 tracking-tight">
+            <h1 className="text-5xl md:text-6xl font-bold mb-2 tracking-tight">
               Mountain Investments
             </h1>
             <div className="w-24 h-1 bg-white mx-auto"></div>
@@ -32,13 +32,13 @@ const Index = () => {
           
           {/* Main Content */}
           <div className="space-y-6">
-            <div className="text-2xl md:text-3xl font-extrabold text-white">
+            <div className="text-2xl md:text-3xl font-extrabold">
               SummitLine
             </div>
-            <p className="text-xl md:text-2xl text-white/90 font-light">
+            <p className="text-xl md:text-2xl opacity-90 font-light">
               Client Portal
             </p>
-            <p className="text-lg text-white/80 max-w-lg mx-auto">
+            <p className="text-lg opacity-80 max-w-lg mx-auto">
               Secure access to your investment portfolio and financial services
             </p>
           </div>
