@@ -16,7 +16,7 @@ function BellMenu() {
       <Button
         aria-label="Open notifications"
         variant="ghost"
-        className="relative text-neutral-300 hover:text-white"
+        className="relative text-muted hover:text-white"
         onClick={() => setOpen(o => !o)}
         title="Notifications"
       >
@@ -34,17 +34,17 @@ function BellMenu() {
       {open && (
         <div className="absolute right-0 mt-2 w-96 max-w-[90vw] card-surface p-2 shadow-lg">
           <div className="flex items-center justify-between px-2 py-1">
-            <div className="text-sm text-neutral-300">{loading ? 'Loading…' : 'Notifications'}</div>
+            <div className="text-sm text-muted">{loading ? 'Loading…' : 'Notifications'}</div>
             <div className="flex items-center gap-2">
-              <button className="text-xs text-neutral-300 hover:text-white" onClick={refresh}>Refresh</button>
-              <button className="text-xs text-neutral-300 hover:text-white" onClick={markAllRead} disabled={unreadCount===0}>
+              <button className="text-xs text-muted hover:text-white" onClick={refresh}>Refresh</button>
+              <button className="text-xs text-muted hover:text-white" onClick={markAllRead} disabled={unreadCount===0}>
                 Mark all read
               </button>
             </div>
           </div>
           <div className="max-h-[60vh] overflow-auto space-y-2 px-2 pb-2">
             {items.length === 0 && (
-              <div className="text-sm text-neutral-400 px-2 py-3">No notifications.</div>
+              <div className="text-sm text-muted px-2 py-3">No notifications.</div>
             )}
             {items.map(n => (
               <a
@@ -54,8 +54,8 @@ function BellMenu() {
                 onClick={(e) => { if (!n.link) e.preventDefault(); }}
               >
                 <div className="text-sm font-semibold">{n.title}</div>
-                {n.body && <div className="text-xs text-neutral-400 mt-0.5">{n.body}</div>}
-                <div className="text-[11px] text-neutral-500 mt-1">
+                {n.body && <div className="text-xs text-muted mt-0.5">{n.body}</div>}
+                <div className="text-[11px] text-muted mt-1">
                   {new Date(n.created_at).toLocaleString()}
                   {!n.read_at && <span className="ml-2 text-red-400">• new</span>}
                 </div>
@@ -83,12 +83,12 @@ export default function AppShell() {
       </a>
 
       <div className="min-h-screen">
-        <header className="sticky top-0 z-40 bg-gradient-to-b from-black/80 to-transparent">
+        <header className="sticky top-0 z-40 app-header">
           <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
             <Link to="/" className="text-2xl font-extrabold tracking-tight text-white">
               SummitLine
             </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-neutral-300" aria-label="Primary">
+            <nav className="hidden md:flex items-center gap-6 text-sm text-muted" aria-label="Primary">
               {tabs.map(t => {
                 const active = pathname.startsWith(t.to);
                 return (
