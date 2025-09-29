@@ -46,7 +46,7 @@ export default function Login() {
           backgroundSize: '100% 100%',
         }}
       />
-      <Card className="relative z-10 w-full max-w-md">
+      <Card className="relative z-50 pointer-events-auto w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">SummitLine</CardTitle>
           <CardDescription>Mountain Investments Client Portal</CardDescription>
