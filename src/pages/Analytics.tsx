@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContaine
 import { TrendingUp, TrendingDown, DollarSign, Users, AlertTriangle, BarChart3 } from 'lucide-react';
 import { MotionRow as Row } from '@/components/MotionRow';
 import { MetricCard } from '@/components/MetricCard';
-import { darkAxis, gridStroke, tooltipStyle } from '@/components/charts/theme';
+import { darkAxis, gridStroke, tooltipStyle, getChartTheme } from '@/components/charts/theme';
 
 type AnalyticsData = {
   portfolio_summary: any[];
@@ -23,6 +23,7 @@ export default function AnalyticsPage() {
   const navigate = useNavigate();
   const notify = useNotify();
   const [loading, setLoading] = useState(true);
+  const [chartTheme, setChartTheme] = useState(getChartTheme());
   const [data, setData] = useState<AnalyticsData>({
     portfolio_summary: [],
     utilization_trends: [],
@@ -102,7 +103,20 @@ export default function AnalyticsPage() {
       await loadAnalytics();
     };
 
+    // Update chart theme on mount and theme changes
+    const updateTheme = () => setChartTheme(getChartTheme());
+    updateTheme();
+    
+    // Listen for theme changes
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, { 
+      attributes: true, 
+      attributeFilter: ['class'] 
+    });
+
     checkAuth();
+    
+    return () => observer?.disconnect();
   }, []);
 
   const formatCurrency = (value: number) => 
@@ -179,21 +193,21 @@ export default function AnalyticsPage() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.sector_breakdown}>
-                    <CartesianGrid stroke={gridStroke} vertical={false} />
+                    <CartesianGrid stroke={chartTheme.grid} vertical={false} />
                     <XAxis 
                       dataKey="sector" 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                     />
                     <YAxis 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                       tickFormatter={(value) => `$${(value / 1000)}K`}
                     />
                     <Tooltip 
-                      contentStyle={tooltipStyle as any}
+                      contentStyle={chartTheme.tooltip as any}
                       formatter={(value: any, name: string) => [
                         formatCurrency(Number(value)), 
                         name === 'principal_outstanding' ? 'Outstanding' : 'Credit Limit'
@@ -216,25 +230,25 @@ export default function AnalyticsPage() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.utilization_trends}>
-                    <CartesianGrid stroke={gridStroke} vertical={false} />
+                    <CartesianGrid stroke={chartTheme.grid} vertical={false} />
                     <XAxis 
                       dataKey="name" 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                       angle={-45}
                       textAnchor="end"
                       height={80}
                     />
                     <YAxis 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                       domain={[0, 100]}
                       tickFormatter={(value) => `${value}%`}
                     />
                     <Tooltip 
-                      contentStyle={tooltipStyle as any}
+                      contentStyle={chartTheme.tooltip as any}
                       formatter={(value: any) => [`${Number(value).toFixed(1)}%`, 'Utilization']}
                     />
                     <Bar dataKey="utilization" name="Utilization %" fill="#ffffff" />
@@ -267,7 +281,7 @@ export default function AnalyticsPage() {
                       ))}
                     </Pie>
                     <Tooltip 
-                      contentStyle={tooltipStyle as any}
+                      contentStyle={chartTheme.tooltip as any}
                       formatter={(value: any, name: string) => [value, name]}
                     />
                   </PieChart>
@@ -296,24 +310,24 @@ export default function AnalyticsPage() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.utilization_trends}>
-                    <CartesianGrid stroke={gridStroke} vertical={false} />
+                    <CartesianGrid stroke={chartTheme.grid} vertical={false} />
                     <XAxis 
                       dataKey="name" 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                       angle={-45}
                       textAnchor="end"
                       height={80}
                     />
                     <YAxis 
                       tickLine={false} 
-                      axisLine={{ stroke: darkAxis.stroke }} 
-                      tick={darkAxis.tick as any}
+                      axisLine={{ stroke: chartTheme.axis.stroke }} 
+                      tick={chartTheme.axis.tick as any}
                       tickFormatter={(value) => `$${(value / 1000)}K`}
                     />
                     <Tooltip 
-                      contentStyle={tooltipStyle as any}
+                      contentStyle={chartTheme.tooltip as any}
                       formatter={(value: any, name: string) => [formatCurrency(Number(value)), name]}
                     />
                     <Bar dataKey="outstanding" name="Outstanding" fill="#E50914" />
