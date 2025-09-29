@@ -41,13 +41,13 @@ export default function Login() {
       className="min-h-screen relative overflow-hidden flex items-center justify-center p-4"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(0,0,0,0.30), rgba(0,0,0,0.30)), url(/lovable-uploads/719f235f-673e-49cc-b8e7-6afd92085ba9.png)',
+          'linear-gradient(hsl(0 0% 100% / 0.70), hsl(0 0% 100% / 0.70)), url(/lovable-uploads/719f235f-673e-49cc-b8e7-6afd92085ba9.png)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
       }}
     >
-      <Card className="relative z-10 w-full max-w-md">
+      <Card className="relative z-[999] pointer-events-auto w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">SummitLine</CardTitle>
           <CardDescription>Mountain Investments Client Portal</CardDescription>
@@ -65,6 +65,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                className="relative z-[1000]"
               />
             </div>
             
@@ -78,6 +79,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
+                className="relative z-[1000]"
               />
             </div>
 
