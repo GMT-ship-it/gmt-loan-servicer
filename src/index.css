@@ -269,3 +269,23 @@ body { background: var(--bg); color: var(--text); }
     @apply bg-background text-foreground;
   }
 }
+
+/* Input light surface utility using design tokens */
+:root {
+  --surface-light: 0 0% 100%;            /* pure white for light inputs */
+  --on-surface-light: 222.2 47.4% 11.2%; /* dark ink for readability */
+}
+.dark {
+  --surface-light: 0 0% 100%;            /* keep inputs light in dark theme */
+  --on-surface-light: 222.2 47.4% 11.2%; /* keep ink dark for contrast */
+}
+
+/* Utility class to force light input fields */
+.input-light {
+  background-color: hsl(var(--surface-light)) !important;
+  color: hsl(var(--on-surface-light)) !important;
+}
+.input-light::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.9;
+}

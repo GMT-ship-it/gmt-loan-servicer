@@ -65,7 +65,8 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="relative z-[1000]"
+                className="input-light relative z-[1000]"
+
               />
             </div>
             
@@ -79,7 +80,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
-                className="relative z-[1000]"
+                className="input-light relative z-[1000]"
               />
             </div>
 
