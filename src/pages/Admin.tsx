@@ -962,16 +962,16 @@ export default function AdminPage() {
 
         <section className="avoid-break mb-6 card-surface p-4">
           <h2 className="font-semibold mb-2">Exposure Summary</h2>
-          <table>
+          <table className="w-full border-separate border-spacing-x-6 border-spacing-y-2">
             <thead>
               <tr>
-                <th scope="col">Customer</th>
-                <th scope="col">Limit</th>
-                <th scope="col">Outstanding</th>
-                <th scope="col">Utilization %</th>
-                <th scope="col">Available</th>
-                <th scope="col">BBC Fresh</th>
-                <th scope="col">Last Draw</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Customer</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Limit</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Outstanding</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Utilization %</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Available</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">BBC Fresh</th>
+                <th scope="col" className="text-left font-medium text-muted-foreground">Last Draw</th>
               </tr>
             </thead>
             <tbody>
@@ -993,14 +993,14 @@ export default function AdminPage() {
         <section className="avoid-break mb-6 card-surface p-4">
           <h2 className="font-semibold mb-2">Pending Draw Approvals</h2>
           {draws.filter(d => d.status === 'submitted').length ? (
-            <table>
+            <table className="w-full border-separate border-spacing-x-6 border-spacing-y-2">
               <thead>
                 <tr>
-                  <th scope="col">Customer</th>
-                  <th scope="col">Amount</th>
-                  <th scope="col">Docs</th>
-                  <th scope="col">BBC</th>
-                  <th scope="col">Submitted</th>
+                  <th scope="col" className="text-left font-medium text-muted-foreground">Customer</th>
+                  <th scope="col" className="text-left font-medium text-muted-foreground">Amount</th>
+                  <th scope="col" className="text-left font-medium text-muted-foreground">Docs</th>
+                  <th scope="col" className="text-left font-medium text-muted-foreground">BBC</th>
+                  <th scope="col" className="text-left font-medium text-muted-foreground">Submitted</th>
                 </tr>
               </thead>
               <tbody>
