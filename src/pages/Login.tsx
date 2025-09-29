@@ -37,7 +37,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 bg-no-repeat opacity-30"
+        style={{ 
+          backgroundImage: `url(/lovable-uploads/719f235f-673e-49cc-b8e7-6afd92085ba9.png)`,
+          backgroundSize: '100% 100%',
+        }}
+      />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">SummitLine</CardTitle>
