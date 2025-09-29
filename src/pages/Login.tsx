@@ -40,13 +40,13 @@ export default function Login() {
     <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
       {/* Background Image */}
       <div 
-        className="absolute inset-0 bg-no-repeat opacity-30 pointer-events-none"
+        className="absolute inset-0 bg-no-repeat opacity-30 pointer-events-none -z-10"
         style={{ 
           backgroundImage: `url(/lovable-uploads/719f235f-673e-49cc-b8e7-6afd92085ba9.png)`,
           backgroundSize: '100% 100%',
         }}
       />
-      <Card className="w-full max-w-md">
+      <Card className="relative z-10 w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">SummitLine</CardTitle>
           <CardDescription>Mountain Investments Client Portal</CardDescription>
