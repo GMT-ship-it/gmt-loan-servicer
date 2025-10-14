@@ -37,25 +37,53 @@ export default function Login() {
   }
 
   return (
-    <div
-      className="min-h-screen relative overflow-hidden flex items-center justify-center p-4"
-      style={{
-        backgroundImage:
-          'linear-gradient(hsl(0 0% 100% / 0.70), hsl(0 0% 100% / 0.70)), url(/lovable-uploads/719f235f-673e-49cc-b8e7-6afd92085ba9.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
-    >
-      <Card className="relative z-[999] pointer-events-auto w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">SummitLine</CardTitle>
-          <CardDescription>Mountain Investments Client Portal</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSubmit} className="space-y-4">
+    <div className="min-h-screen relative overflow-hidden flex items-center justify-center p-4">
+      {/* Background gradient matching home page */}
+      <div 
+        className="absolute inset-0" 
+        style={{
+          background: 'radial-gradient(circle at top left, #041F1E, #02191A)'
+        }}
+      />
+      
+      {/* Subtle animated background effect */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-pulse delay-700" />
+      </div>
+      
+      {/* Back to home link */}
+      <button
+        onClick={() => navigate('/')}
+        className="absolute top-6 left-6 text-foreground/60 hover:text-accent transition-colors z-10"
+      >
+        ← Back to Home
+      </button>
+      
+      {/* Login Card */}
+      <div className="relative z-10 w-full max-w-md">
+        <div className="glass-card p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="mb-2">
+              <h1 className="text-3xl font-bold mb-1">
+                Summit<span className="text-accent">Line</span>
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Mountain Investments Client Portal
+              </p>
+            </div>
+            
+            {/* Accent divider */}
+            <div className="w-16 h-1 bg-accent/50 mx-auto mt-4 rounded-full" />
+          </div>
+          
+          {/* Form */}
+          <form onSubmit={onSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-foreground/90">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -65,13 +93,14 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="input-light relative z-[1000]"
-
+                className="bg-background/50 border-accent/30 focus:border-accent transition-colors"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-foreground/90">
+                Password
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -80,12 +109,12 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
-                className="input-light relative z-[1000]"
+                className="bg-background/50 border-accent/30 focus:border-accent transition-colors"
               />
             </div>
 
             {errorMsg && (
-              <Alert variant="destructive">
+              <Alert variant="destructive" className="border-destructive/50 bg-destructive/10">
                 <AlertDescription>{errorMsg}</AlertDescription>
               </Alert>
             )}
@@ -93,7 +122,7 @@ export default function Login() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full"
+              className="w-full btn-primary"
             >
               {loading ? (
                 <>
@@ -105,8 +134,18 @@ export default function Login() {
               )}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+          
+          {/* Footer links */}
+          <div className="mt-6 text-center text-sm text-muted-foreground">
+            <p>
+              Need access?{' '}
+              <button className="text-accent hover:underline">
+                Contact Support
+              </button>
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
