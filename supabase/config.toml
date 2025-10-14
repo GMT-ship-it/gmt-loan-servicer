@@ -1,5 +1,8 @@
 project_id = "ogmrcygjqqugcwzaioxc"
 
+[functions.create-admin-user]
+verify_jwt = false
+
 [functions.ingest-extract]
 verify_jwt = true
 
