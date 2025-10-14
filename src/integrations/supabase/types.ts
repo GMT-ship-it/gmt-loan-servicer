@@ -1863,6 +1863,16 @@ export type Database = {
         Args: { p_co_date: string; p_loan_id: string; p_memo?: string }
         Returns: undefined
       }
+      check_rls_status: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          policy_count: number
+          rls_enabled: boolean
+          rls_forced: boolean
+          schema_name: string
+          table_name: string
+        }[]
+      }
       escrow_post_transaction: {
         Args: {
           p_amount: number
