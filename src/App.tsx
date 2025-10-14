@@ -13,6 +13,7 @@ import AdminLoans from "./pages/AdminLoans";
 import AdminLoanDetail from "./pages/AdminLoanDetail";
 import Analytics from "./pages/Analytics";
 import Borrower from "./pages/Borrower";
+import BorrowerLoanDetail from "./pages/portal/LoanDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/admin/loans/:id" element={<AdminLoanDetail />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/borrower" element={<Borrower />} />
+            <Route path="/portal/loans/:id" element={<BorrowerLoanDetail />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

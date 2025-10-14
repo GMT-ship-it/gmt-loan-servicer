@@ -1076,6 +1076,10 @@ export type Database = {
         Args: { p_asof: string; p_days: number; p_loan_id: string }
         Returns: undefined
       }
+      accrued_interest: {
+        Args: { p_loan_id: string }
+        Returns: number
+      }
       apply_payment_waterfall: {
         Args: { p_payment_id: string }
         Returns: undefined
@@ -1171,6 +1175,10 @@ export type Database = {
           p_type: string
         }
         Returns: undefined
+      }
+      payoff_quote: {
+        Args: { p_asof: string; p_loan_id: string }
+        Returns: number
       }
       portfolio_policy_breaches: {
         Args: Record<PropertyKey, never>
