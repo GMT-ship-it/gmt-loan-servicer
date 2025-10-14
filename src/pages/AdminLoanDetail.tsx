@@ -3,8 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function AdminLoanDetail() {
   const { id } = useParams();
@@ -17,6 +19,7 @@ export default function AdminLoanDetail() {
   const [entries, setEntries] = useState<any[]>([]);
   const [amount, setAmount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [genBusy, setGenBusy] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -139,6 +142,200 @@ export default function AdminLoanDetail() {
     }
   }
 
+  function prevMonthRange(today = new Date()) {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const end = new Date(today.getFullYear(), today.getMonth(), 0);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    return { start, end, startISO: iso(start), endISO: iso(end) };
+  }
+
+  async function generateMonthlyStatement() {
+    try {
+      setGenBusy(true);
+      if (!loan) throw new Error("Loan not loaded");
+
+      const { startISO, endISO } = prevMonthRange(new Date());
+
+      // Fetch balances & activity for the period
+      const [{ data: begPrin }, { data: endPrin }] = await Promise.all([
+        supabase.rpc("principal_outstanding_asof", {
+          p_loan_id: loan.id,
+          p_asof: startISO,
+        }),
+        supabase.rpc("principal_outstanding_asof", {
+          p_loan_id: loan.id,
+          p_asof: endISO,
+        }),
+      ]);
+
+      // Interest accrued in period (journal_entries: INTEREST_RECEIVABLE debits)
+      const { data: intRows } = await supabase
+        .from("journal_entries")
+        .select("amount, entry_date")
+        .eq("loan_id", loan.id)
+        .eq("account_code", "INTEREST_RECEIVABLE")
+        .gte("entry_date", startISO)
+        .lte("entry_date", endISO);
+
+      const interestAccrued = (intRows || []).reduce(
+        (s: number, r: any) => s + (Number(r.amount) || 0),
+        0
+      );
+
+      // Payments in period with breakdowns
+      const { data: pays } = await supabase
+        .from("payments")
+        .select("amount, received_at, breakdown")
+        .eq("loan_id", loan.id)
+        .eq("status", "succeeded")
+        .gte("received_at", `${startISO} 00:00:00`)
+        .lte("received_at", `${endISO} 23:59:59`)
+        .order("received_at", { ascending: true });
+
+      const totals = (pays || []).reduce(
+        (acc: any, p: any) => {
+          const b = (p.breakdown as any) || {};
+          acc.total += Number(p.amount) || 0;
+          acc.principal += Number(b.principal || 0);
+          acc.interest += Number(b.interest || 0);
+          acc.fees += Number(b.fees || 0);
+          return acc;
+        },
+        { total: 0, principal: 0, interest: 0, fees: 0 }
+      );
+
+      // Escrow activity (optional)
+      const { data: escrowAcct } = await supabase
+        .from("escrow_accounts")
+        .select("id")
+        .eq("loan_id", loan.id)
+        .maybeSingle();
+
+      let escrowTx: any[] = [];
+      if (escrowAcct?.id) {
+        const { data: escrowData } = await supabase
+          .from("escrow_transactions")
+          .select("tx_date, amount, kind, memo")
+          .eq("escrow_id", escrowAcct.id)
+          .gte("tx_date", startISO)
+          .lte("tx_date", endISO)
+          .in("kind", ["deposit", "disbursement", "adjustment"]);
+        escrowTx = escrowData || [];
+      }
+
+      // --- Build PDF ---
+      const doc = new jsPDF();
+
+      const title = `Mountain Investments — Monthly Statement`;
+      const period = `${new Date(startISO).toLocaleDateString()} – ${new Date(
+        endISO
+      ).toLocaleDateString()}`;
+      doc.setFontSize(14);
+      doc.text(title, 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Loan #${loan.loan_number}`, 14, 22);
+      doc.text(`Period: ${period}`, 14, 27);
+
+      // Summary table
+      autoTable(doc, {
+        startY: 32,
+        head: [["Item", "Amount (USD)"]],
+        body: [
+          ["Beginning Principal", fmt(begPrin)],
+          ["Interest Accrued", fmt(interestAccrued)],
+          ["Payments - Total", fmt(totals.total)],
+          ["  ↳ Principal", fmt(totals.principal)],
+          ["  ↳ Interest", fmt(totals.interest)],
+          ["  ↳ Fees", fmt(totals.fees)],
+          ["Ending Principal", fmt(endPrin)],
+        ],
+        styles: { fontSize: 10 },
+        theme: "grid",
+      });
+
+      // Payments table
+      if ((pays || []).length) {
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 8,
+          head: [["Date", "Amount", "Principal", "Interest", "Fees"]],
+          body: (pays || []).map((p) => [
+            new Date(p.received_at).toLocaleDateString(),
+            fmt(p.amount),
+            fmt((p.breakdown as any)?.principal || 0),
+            fmt((p.breakdown as any)?.interest || 0),
+            fmt((p.breakdown as any)?.fees || 0),
+          ]),
+          styles: { fontSize: 9 },
+          theme: "striped",
+        });
+      }
+
+      // Escrow table (optional)
+      if (escrowTx.length) {
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 8,
+          head: [["Date", "Kind", "Amount", "Memo"]],
+          body: escrowTx.map((t: any) => [
+            new Date(t.tx_date).toLocaleDateString(),
+            t.kind,
+            fmt(t.amount),
+            t.memo || "",
+          ]),
+          styles: { fontSize: 9 },
+          theme: "striped",
+        });
+      }
+
+      function fmt(n: any) {
+        const v = Number(n || 0);
+        return v.toLocaleString(undefined, {
+          style: "currency",
+          currency: "USD",
+        });
+      }
+
+      // Save to a Blob
+      const pdfBlob = doc.output("blob");
+
+      // Upload to Storage (bucket: statements)
+      const fileName = `loan_${loan.id}_${startISO}_${endISO}.pdf`;
+      const storagePath = `${loan.id}/${fileName}`;
+
+      const { error: upErr } = await supabase.storage
+        .from("statements")
+        .upload(storagePath, pdfBlob, {
+          contentType: "application/pdf",
+          upsert: true,
+        });
+      if (upErr) throw upErr;
+
+      // Insert statements row
+      const { error: insErr } = await supabase.from("statements").insert({
+        loan_id: loan.id,
+        period_start: startISO,
+        period_end: endISO,
+        pdf_path: storagePath,
+      });
+      if (insErr) throw insErr;
+
+      toast({
+        title: "Statement Generated",
+        description: "Monthly statement has been generated and saved successfully",
+      });
+
+      loadData();
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: e.message || "Failed to generate statement",
+        variant: "destructive",
+      });
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
   if (loading) {
     return <div className="p-6">Loading loan details...</div>;
   }
@@ -258,6 +455,20 @@ export default function AdminLoanDetail() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Statements</h2>
+          <Button
+            onClick={generateMonthlyStatement}
+            disabled={genBusy}
+            variant="outline"
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            {genBusy ? "Generating..." : "Generate Prior-Month Statement"}
+          </Button>
+        </div>
       </section>
 
       <section className="space-y-4">

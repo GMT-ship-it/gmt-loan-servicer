@@ -1209,6 +1209,10 @@ export type Database = {
         Args: { p_loan_id: string }
         Returns: number
       }
+      principal_outstanding_asof: {
+        Args: { p_asof: string; p_loan_id: string }
+        Returns: number
+      }
       recalc_bbc_header: {
         Args: { p_report: string }
         Returns: undefined
