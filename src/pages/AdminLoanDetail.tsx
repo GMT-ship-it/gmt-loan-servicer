@@ -536,6 +536,8 @@ export default function AdminLoanDetail() {
         )}
       </section>
 
+      <EscrowPanel loanId={id!} onRefresh={loadData} />
+
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Actions</h2>
@@ -624,5 +626,182 @@ function StatCard({
       <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
       <div className="text-2xl font-semibold mt-2">{displayValue}</div>
     </div>
+  );
+}
+
+function EscrowPanel({ loanId, onRefresh }: { loanId: string; onRefresh: () => void }) {
+  const { toast } = useToast();
+  const [summary, setSummary] = useState<any | null>(null);
+  const [tx, setTx] = useState<any[]>([]);
+  const [amount, setAmount] = useState<number>(0);
+  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [memo, setMemo] = useState<string>("");
+
+  async function refresh() {
+    const { data: sum } = await supabase
+      .from("escrow_summary")
+      .select("*")
+      .eq("loan_id", loanId)
+      .maybeSingle();
+    setSummary(sum || null);
+
+    const { data: esc } = await supabase
+      .from("escrow_accounts")
+      .select("id")
+      .eq("loan_id", loanId)
+      .maybeSingle();
+
+    if (esc?.id) {
+      const { data: rows } = await supabase
+        .from("escrow_transactions")
+        .select("*")
+        .eq("escrow_id", esc.id)
+        .order("tx_date", { ascending: false })
+        .limit(25);
+      setTx(rows || []);
+    } else {
+      setTx([]);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+  }, [loanId]);
+
+  async function postDeposit() {
+    if (amount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Enter a positive amount",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { error } = await supabase.rpc("escrow_post_transaction", {
+      p_loan_id: loanId,
+      p_tx_date: date,
+      p_amount: amount,
+      p_memo: memo || "Escrow deposit",
+    });
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Deposit Posted",
+      description: `Successfully posted escrow deposit of $${amount.toLocaleString()}`,
+    });
+    setAmount(0);
+    setMemo("");
+    await refresh();
+    onRefresh();
+  }
+
+  async function postDisbursement() {
+    if (amount <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Enter a positive amount",
+        variant: "destructive",
+      });
+      return;
+    }
+    const { error } = await supabase.rpc("escrow_post_transaction", {
+      p_loan_id: loanId,
+      p_tx_date: date,
+      p_amount: -amount,
+      p_memo: memo || "Escrow disbursement",
+    });
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Disbursement Posted",
+      description: `Successfully posted escrow disbursement of $${amount.toLocaleString()}`,
+    });
+    setAmount(0);
+    setMemo("");
+    await refresh();
+    onRefresh();
+  }
+
+  const fmtMoney = (n: number) =>
+    (n || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold">Escrow</h2>
+
+      <div className="grid md:grid-cols-3 gap-3">
+        <StatCard label="Balance" value={summary?.escrow_balance || 0} money />
+        <StatCard label="Deposits (lifetime)" value={summary?.deposits_total || 0} money />
+        <StatCard label="Disbursements (lifetime)" value={summary?.disbursements_total || 0} money />
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="grid md:grid-cols-4 gap-2">
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Input
+            type="number"
+            placeholder="Amount"
+            value={amount || ""}
+            onChange={(e) => setAmount(Number(e.target.value))}
+          />
+          <Input
+            className="md:col-span-2"
+            placeholder="Memo (optional)"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={postDeposit}>
+            Post Deposit
+          </Button>
+          <Button variant="secondary" onClick={postDisbursement}>
+            Post Disbursement
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-muted/50">
+            <tr>
+              <th className="p-3 text-left">Date</th>
+              <th className="p-3 text-left">Kind</th>
+              <th className="p-3 text-right">Amount</th>
+              <th className="p-3 text-left">Memo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tx.map((t: any) => (
+              <tr key={t.id} className="border-b border-border">
+                <td className="p-3">{new Date(t.tx_date).toLocaleDateString()}</td>
+                <td className="p-3 capitalize">{t.kind}</td>
+                <td className="p-3 text-right">{fmtMoney(t.amount)}</td>
+                <td className="p-3 text-muted-foreground">{t.memo || "—"}</td>
+              </tr>
+            ))}
+            {tx.length === 0 && (
+              <tr>
+                <td className="p-3 text-muted-foreground text-center" colSpan={4}>
+                  No escrow activity.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

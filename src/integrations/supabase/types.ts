@@ -481,6 +481,13 @@ export type Database = {
             referencedRelation: "escrow_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "escrow_transactions_escrow_id_fkey"
+            columns: ["escrow_id"]
+            isOneToOne: false
+            referencedRelation: "escrow_summary"
+            referencedColumns: ["escrow_id"]
+          },
         ]
       }
       facilities: {
@@ -1194,6 +1201,38 @@ export type Database = {
       }
     }
     Views: {
+      escrow_summary: {
+        Row: {
+          deposits_total: number | null
+          disbursements_total: number | null
+          escrow_balance: number | null
+          escrow_id: string | null
+          loan_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_delinquency_summary"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       loan_delinquency_summary: {
         Row: {
           bucket: string | null
@@ -1301,6 +1340,15 @@ export type Database = {
       borrower_due_summary: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: Json
+      }
+      escrow_post_transaction: {
+        Args: {
+          p_amount: number
+          p_loan_id: string
+          p_memo?: string
+          p_tx_date: string
+        }
+        Returns: undefined
       }
       evaluate_covenants: {
         Args: { p_facility: string }

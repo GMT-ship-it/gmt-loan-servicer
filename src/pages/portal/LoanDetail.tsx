@@ -223,6 +223,12 @@ export default function BorrowerLoanDetail() {
         </Card>
       </section>
 
+      {/* Escrow Activity */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Escrow Activity</h2>
+        <EscrowActivity loanId={id!} />
+      </section>
+
       {/* Payoff Letter Generator */}
       {loan && balances && (
         <section className="space-y-4">
@@ -409,6 +415,69 @@ function PayoffLetter({
           Admin PDFs are stored in Statements.
         </p>
       </CardContent>
+    </Card>
+  );
+}
+
+function EscrowActivity({ loanId }: { loanId: string }) {
+  const [tx, setTx] = useState<any[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data: esc } = await supabase
+        .from("escrow_accounts")
+        .select("id")
+        .eq("loan_id", loanId)
+        .maybeSingle();
+
+      if (esc?.id) {
+        const { data: rows } = await supabase
+          .from("escrow_transactions")
+          .select("*")
+          .eq("escrow_id", esc.id)
+          .order("tx_date", { ascending: false })
+          .limit(25);
+        setTx(rows || []);
+      }
+    })();
+  }, [loanId]);
+
+  return (
+    <Card>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-muted/50">
+            <tr>
+              <th className="p-4 text-left font-medium">Date</th>
+              <th className="p-4 text-left font-medium">Type</th>
+              <th className="p-4 text-right font-medium">Amount</th>
+              <th className="p-4 text-left font-medium">Memo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tx.map((t) => (
+              <tr key={t.id} className="border-b border-border">
+                <td className="p-4">{new Date(t.tx_date).toLocaleDateString()}</td>
+                <td className="p-4 capitalize">{t.kind}</td>
+                <td className="p-4 text-right font-mono">
+                  {formatMoney(Number(t.amount))}
+                </td>
+                <td className="p-4 text-muted-foreground">{t.memo || "—"}</td>
+              </tr>
+            ))}
+            {tx.length === 0 && (
+              <tr>
+                <td
+                  className="p-4 text-muted-foreground text-center"
+                  colSpan={4}
+                >
+                  No escrow activity yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
