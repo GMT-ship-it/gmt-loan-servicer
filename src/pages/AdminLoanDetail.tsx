@@ -535,7 +535,7 @@ export default function AdminLoanDetail() {
 
       <EscrowSettings loan={loan} onRefresh={loadData} />
 
-      <LateFeesPanel loanId={loan.id} />
+      <LateFeesPanel loanId={loan.id} onRefresh={loadData} />
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>

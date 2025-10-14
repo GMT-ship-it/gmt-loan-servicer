@@ -5,9 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 
 interface LateFeesPanelProps {
   loanId: string;
+  onRefresh?: () => void;
 }
 
-export function LateFeesPanel({ loanId }: LateFeesPanelProps) {
+export function LateFeesPanel({ loanId, onRefresh }: LateFeesPanelProps) {
   const [rows, setRows] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
@@ -45,6 +46,7 @@ export function LateFeesPanel({ loanId }: LateFeesPanelProps) {
         description: "Late fee waived successfully",
       });
       await refresh();
+      onRefresh?.();
     }
     setBusy(false);
   }
