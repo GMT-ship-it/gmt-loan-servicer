@@ -22,6 +22,7 @@ export default function AdminLoanDetail() {
   const [genBusy, setGenBusy] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [dlq, setDlq] = useState<any | null>(null);
+  const [escCalc, setEscCalc] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -102,6 +103,10 @@ export default function AdminLoanDetail() {
         .eq('loan_id', id)
         .maybeSingle();
       setDlq(dlqData || null);
+
+      // Fetch escrow shortage/surplus
+      const { data: escData } = await supabase.rpc("escrow_shortage_surplus", { p_loan_id: id });
+      setEscCalc(escData || null);
     } catch (err) {
       console.error("Error loading loan:", err);
       toast({
@@ -326,6 +331,24 @@ export default function AdminLoanDetail() {
         });
       }
 
+      // Escrow analysis summary
+      if (escInfo) {
+        const esc = escInfo as any;
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 8,
+          head: [["Escrow", "Amount (USD)"]],
+          body: [
+            ["Monthly Required", fmt(esc.monthly_required || 0)],
+            ["Cushion Required", fmt(esc.cushion_required || 0)],
+            ["Balance", fmt(esc.balance || 0)],
+            ["Shortage", fmt(esc.shortage || 0)],
+            ["Surplus", fmt(esc.surplus || 0)],
+          ],
+          styles: { fontSize: 10 },
+          theme: "grid",
+        });
+      }
+
       // Escrow summary with shortage/surplus
       if (escInfo) {
         const esc = escInfo as any;
@@ -495,6 +518,21 @@ export default function AdminLoanDetail() {
           </div>
         </section>
       )}
+
+      {/* Escrow Analysis */}
+      {escCalc && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Escrow Analysis</h2>
+          <div className="grid md:grid-cols-4 gap-3">
+            <StatCard label="Monthly Required" value={escCalc.monthly_required} money />
+            <StatCard label="Cushion Required" value={escCalc.cushion_required} money />
+            <StatCard label="Shortage" value={escCalc.shortage} money />
+            <StatCard label="Surplus" value={escCalc.surplus} money />
+          </div>
+        </section>
+      )}
+
+      <EscrowSettings loan={loan} onRefresh={loadData} />
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>
