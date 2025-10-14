@@ -22,7 +22,16 @@ type ExtractedTerms = {
   amortization_type?: "amortizing" | "interest_only";
   term_months?: number;
   first_payment_date?: string;
+  origination_date?: string;
+  balloon_amount?: number | null;
+  grace_days?: number | null;
+  late_fee_type?: "flat" | "percent" | null;
+  late_fee_amount?: number | null;
+  borrower_full_name?: string;
+  borrower_email?: string;
 };
+
+type ParsedFields = Set<string>;
 
 export function NewLoanWizard({ onClose, onCreated }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -30,6 +39,9 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
   const [borrowerId, setBorrowerId] = useState<string>("");
   const [files, setFiles] = useState<FileList | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [uploadFolder, setUploadFolder] = useState<string>("");
+  const [parsedFields, setParsedFields] = useState<ParsedFields>(new Set());
   const [terms, setTerms] = useState<ExtractedTerms>({
     compounding_basis: "ACT/365",
     payment_frequency: "monthly",
@@ -86,6 +98,7 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
     setUploading(true);
     try {
       const folder = `ingest/${crypto.randomUUID()}`;
+      setUploadFolder(folder);
 
       for (const file of Array.from(files)) {
         const path = `${folder}/${file.name}`;
@@ -102,6 +115,7 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
       }
 
       toast({ title: "Documents uploaded successfully" });
+      return folder;
     } catch (err: any) {
       toast({
         title: "Upload failed",
@@ -114,18 +128,110 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
     }
   }
 
-  async function extractTerms() {
-    // Placeholder: In production, call your Edge Function here
-    // For now, set some default values
-    setTerms((prev) => ({
-      ...prev,
-      loan_number: `LN-${Math.floor(Math.random() * 1e6)}`,
-      principal: prev.principal ?? 250000,
-      interest_rate: prev.interest_rate ?? 0.12,
-      term_months: prev.term_months ?? 24,
-      first_payment_date:
-        prev.first_payment_date ?? new Date().toISOString().slice(0, 10),
-    }));
+  async function extractTermsFromDocs(folder: string) {
+    setExtracting(true);
+    try {
+      // List uploaded files in the folder
+      const { data: listed, error: listErr } = await supabase.storage
+        .from("loan-documents")
+        .list(folder);
+
+      if (listErr) throw listErr;
+
+      // Create signed URLs for private bucket
+      const filesWithUrls: { name: string; url: string }[] = [];
+      for (const obj of listed || []) {
+        const path = `${folder}/${obj.name}`;
+        const { data: signed } = await supabase.storage
+          .from("loan-documents")
+          .createSignedUrl(path, 300); // 5 minutes
+
+        if (signed?.signedUrl) {
+          filesWithUrls.push({ name: obj.name, url: signed.signedUrl });
+        }
+      }
+
+      if (filesWithUrls.length === 0) {
+        throw new Error("No files found to extract");
+      }
+
+      // Call the Edge Function
+      const { data: functionData, error: functionError } =
+        await supabase.functions.invoke("ingest-extract", {
+          body: { files: filesWithUrls },
+        });
+
+      if (functionError) throw functionError;
+
+      const extracted = functionData?.extracted || {};
+      console.log("Extracted terms:", extracted);
+
+      // Track which fields were parsed
+      const parsed = new Set<string>();
+      Object.keys(extracted).forEach((key) => {
+        if (extracted[key] !== undefined && extracted[key] !== null) {
+          parsed.add(key);
+        }
+      });
+      setParsedFields(parsed);
+
+      // Update terms with extracted data (with fallbacks)
+      setTerms((prev) => ({
+        ...prev,
+        loan_number: extracted.loan_number || `LN-${Math.floor(Math.random() * 1e6)}`,
+        principal: extracted.principal ?? prev.principal ?? 250000,
+        interest_rate: extracted.interest_rate ?? prev.interest_rate ?? 0.12,
+        compounding_basis: extracted.compounding_basis || prev.compounding_basis || "ACT/365",
+        payment_frequency: extracted.payment_frequency || prev.payment_frequency || "monthly",
+        amortization_type: extracted.amortization_type || prev.amortization_type || "amortizing",
+        rate_type: extracted.rate_type || prev.rate_type || "fixed",
+        term_months: extracted.term_months ?? prev.term_months ?? 24,
+        first_payment_date:
+          extracted.first_payment_date ||
+          prev.first_payment_date ||
+          new Date().toISOString().slice(0, 10),
+        origination_date:
+          extracted.origination_date || new Date().toISOString().slice(0, 10),
+        balloon_amount: extracted.balloon_amount ?? null,
+        grace_days: extracted.grace_days ?? 10,
+        late_fee_type: extracted.late_fee_type ?? null,
+        late_fee_amount: extracted.late_fee_amount ?? null,
+        borrower_full_name: extracted.borrower_full_name,
+        borrower_email: extracted.borrower_email,
+      }));
+
+      // Update loan_documents with parsed JSON
+      await supabase
+        .from("loan_documents")
+        .update({ parsed_json: extracted } as any)
+        .ilike("file_path", `${folder}%`);
+
+      toast({
+        title: "Terms extracted",
+        description: parsed.size > 0
+          ? `Extracted ${parsed.size} field(s) from documents`
+          : "Review and fill in the loan terms",
+      });
+    } catch (err: any) {
+      console.error("Extract error:", err);
+      toast({
+        title: "Extraction failed",
+        description: err.message || "Could not extract terms. Please fill manually.",
+        variant: "destructive",
+      });
+      // Set defaults on error
+      setTerms((prev) => ({
+        ...prev,
+        loan_number: prev.loan_number || `LN-${Math.floor(Math.random() * 1e6)}`,
+        principal: prev.principal ?? 250000,
+        interest_rate: prev.interest_rate ?? 0.12,
+        term_months: prev.term_months ?? 24,
+        first_payment_date:
+          prev.first_payment_date || new Date().toISOString().slice(0, 10),
+      }));
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function createLoan() {
@@ -139,21 +245,37 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
     }
 
     try {
-      const { error } = await supabase.from("loans").insert({
-        borrower_id: borrowerId,
-        loan_number: terms.loan_number,
-        principal: terms.principal,
-        interest_rate: terms.interest_rate!,
-        rate_type: terms.rate_type!,
-        compounding_basis: terms.compounding_basis!,
-        payment_frequency: terms.payment_frequency!,
-        amortization_type: terms.amortization_type!,
-        term_months: terms.term_months!,
-        first_payment_date: terms.first_payment_date!,
-        status: "active",
-      } as any);
+      const { data, error } = await supabase
+        .from("loans")
+        .insert({
+          borrower_id: borrowerId,
+          loan_number: terms.loan_number,
+          principal: terms.principal,
+          interest_rate: terms.interest_rate!,
+          rate_type: terms.rate_type!,
+          compounding_basis: terms.compounding_basis!,
+          payment_frequency: terms.payment_frequency!,
+          amortization_type: terms.amortization_type!,
+          term_months: terms.term_months!,
+          first_payment_date: terms.first_payment_date!,
+          status: "active",
+          balloon_amount: terms.balloon_amount,
+          grace_days: terms.grace_days,
+          late_fee_type: terms.late_fee_type,
+          late_fee_amount: terms.late_fee_amount,
+        } as any)
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Link uploaded documents to the new loan
+      if (uploadFolder && data?.id) {
+        await supabase
+          .from("loan_documents")
+          .update({ loan_id: data.id, doc_type: "note" } as any)
+          .ilike("file_path", `${uploadFolder}%`);
+      }
 
       toast({ title: "Loan created successfully" });
       onCreated();
@@ -210,10 +332,13 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
               files={files}
               setFiles={setFiles}
               uploading={uploading}
+              extracting={extracting}
               onBack={() => setStep(1)}
               onNext={async () => {
-                await uploadDocs();
-                await extractTerms();
+                const folder = await uploadDocs();
+                if (folder) {
+                  await extractTermsFromDocs(folder);
+                }
                 setStep(3);
               }}
             />
@@ -224,6 +349,7 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
             <TermsStep
               terms={terms}
               setTerms={setTerms}
+              parsedFields={parsedFields}
               onBack={() => setStep(2)}
               onCreate={createLoan}
             />
@@ -306,7 +432,14 @@ function BorrowerStep({
   );
 }
 
-function DocumentsStep({ files, setFiles, uploading, onBack, onNext }: any) {
+function DocumentsStep({
+  files,
+  setFiles,
+  uploading,
+  extracting,
+  onBack,
+  onNext,
+}: any) {
   return (
     <div className="space-y-6">
       <div>
@@ -323,26 +456,52 @@ function DocumentsStep({ files, setFiles, uploading, onBack, onNext }: any) {
             {files.length} file(s) selected
           </div>
         )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          AI will extract loan terms from your documents automatically
+        </p>
       </div>
 
       <div className="flex justify-between">
         <Button variant="outline" onClick={onBack}>
           ← Back
         </Button>
-        <Button onClick={onNext} disabled={!files || uploading}>
-          {uploading ? "Uploading..." : "Upload & Extract →"}
+        <Button onClick={onNext} disabled={!files || uploading || extracting}>
+          {uploading
+            ? "Uploading..."
+            : extracting
+            ? "Extracting terms..."
+            : "Upload & Extract →"}
         </Button>
       </div>
     </div>
   );
 }
 
-function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
+function ParsedBadge({ field, parsedFields }: { field: string; parsedFields: ParsedFields }) {
+  if (!parsedFields.has(field)) return null;
+  return (
+    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+      parsed
+    </span>
+  );
+}
+
+function TermsStep({ terms, setTerms, parsedFields, onBack, onCreate }: any) {
   return (
     <div className="space-y-6">
+      {parsedFields?.size > 0 && (
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-900 dark:text-blue-200">
+          ✓ Extracted {parsedFields.size} field(s) from documents. Review and
+          edit as needed.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label>Loan Number</Label>
+          <Label>
+            Loan Number
+            <ParsedBadge field="loan_number" parsedFields={parsedFields} />
+          </Label>
           <Input
             value={terms.loan_number || ""}
             onChange={(e) =>
@@ -351,7 +510,10 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
           />
         </div>
         <div>
-          <Label>Principal</Label>
+          <Label>
+            Principal
+            <ParsedBadge field="principal" parsedFields={parsedFields} />
+          </Label>
           <Input
             type="number"
             value={terms.principal || ""}
@@ -361,7 +523,10 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
           />
         </div>
         <div>
-          <Label>Interest Rate (decimal, e.g., 0.12)</Label>
+          <Label>
+            Interest Rate (decimal, e.g., 0.12)
+            <ParsedBadge field="interest_rate" parsedFields={parsedFields} />
+          </Label>
           <Input
             type="number"
             step="0.001"
@@ -372,7 +537,10 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
           />
         </div>
         <div>
-          <Label>Term (months)</Label>
+          <Label>
+            Term (months)
+            <ParsedBadge field="term_months" parsedFields={parsedFields} />
+          </Label>
           <Input
             type="number"
             value={terms.term_months || ""}
@@ -382,7 +550,13 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
           />
         </div>
         <div>
-          <Label>First Payment Date</Label>
+          <Label>
+            First Payment Date
+            <ParsedBadge
+              field="first_payment_date"
+              parsedFields={parsedFields}
+            />
+          </Label>
           <Input
             type="date"
             value={terms.first_payment_date || ""}
@@ -392,7 +566,13 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
           />
         </div>
         <div>
-          <Label>Payment Frequency</Label>
+          <Label>
+            Payment Frequency
+            <ParsedBadge
+              field="payment_frequency"
+              parsedFields={parsedFields}
+            />
+          </Label>
           <select
             className="w-full rounded-md border border-input bg-background px-3 py-2"
             value={terms.payment_frequency}
@@ -404,6 +584,39 @@ function TermsStep({ terms, setTerms, onBack, onCreate }: any) {
             <option value="biweekly">Biweekly</option>
             <option value="weekly">Weekly</option>
           </select>
+        </div>
+        <div>
+          <Label>
+            Day Count Basis
+            <ParsedBadge
+              field="compounding_basis"
+              parsedFields={parsedFields}
+            />
+          </Label>
+          <select
+            className="w-full rounded-md border border-input bg-background px-3 py-2"
+            value={terms.compounding_basis}
+            onChange={(e) =>
+              setTerms({ ...terms, compounding_basis: e.target.value })
+            }
+          >
+            <option value="ACT/365">ACT/365</option>
+            <option value="30/360">30/360</option>
+          </select>
+        </div>
+        <div>
+          <Label>
+            Grace Days
+            <ParsedBadge field="grace_days" parsedFields={parsedFields} />
+          </Label>
+          <Input
+            type="number"
+            value={terms.grace_days || ""}
+            onChange={(e) =>
+              setTerms({ ...terms, grace_days: Number(e.target.value) })
+            }
+            placeholder="0"
+          />
         </div>
       </div>
 

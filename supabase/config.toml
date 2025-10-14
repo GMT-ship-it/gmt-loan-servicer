@@ -1,5 +1,8 @@
 project_id = "ogmrcygjqqugcwzaioxc"
 
+[functions.ingest-extract]
+verify_jwt = true
+
 [functions.post-interest-eod]
 verify_jwt = false
 
