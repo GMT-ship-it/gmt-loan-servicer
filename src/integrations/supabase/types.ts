@@ -436,6 +436,13 @@ export type Database = {
             referencedRelation: "loans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
         ]
       }
       escrow_transactions: {
@@ -620,6 +627,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "journal_entries_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+          {
             foreignKeyName: "journal_entries_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -675,6 +689,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loan_documents_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+          {
             foreignKeyName: "loan_documents_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -728,6 +749,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "loans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_schedules_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -999,6 +1027,13 @@ export type Database = {
             referencedRelation: "loans"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
         ]
       }
       profiles: {
@@ -1064,6 +1099,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "loans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "statements_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
           },
         ]
       }
@@ -1205,6 +1247,39 @@ export type Database = {
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
+      portfolio_dashboard: {
+        Row: {
+          accrued_interest: number | null
+          borrower_id: string | null
+          bucket: string | null
+          days_past_due: number | null
+          loan_id: string | null
+          loan_number: string | null
+          maturity_date: string | null
+          next_due_date: string | null
+          origination_date: string | null
+          past_due_amount: number | null
+          principal_outstanding: number | null
+          rate: number | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
             referencedColumns: ["id"]
           },
         ]
