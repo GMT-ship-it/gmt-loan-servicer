@@ -1,11 +1,15 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useState } from 'react';
-import { Bell } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CompactToggle from '@/components/CompactToggle';
 import ThemeToggle from '@/components/ThemeToggle';
 import { NotificationsProvider, useNotifications } from '@/contexts/NotificationsContext';
 import CommandPalette from '@/components/CommandPalette';
+import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
+
+type AppRole = "lender_admin" | "lender_analyst" | "borrower_admin" | "borrower_user";
 
 function BellMenu() {
   const { items, unreadCount, loading, markAllRead, refresh } = useNotifications();
@@ -70,11 +74,31 @@ function BellMenu() {
 
 export default function AppShell() {
   const { pathname } = useLocation();
-  const tabs = [
-    { to: '/borrower', label: 'Borrower' },
-    { to: '/admin',    label: 'Admin' },
-    { to: '/analytics',label: 'Analytics' },
-  ];
+  const navigate = useNavigate();
+  const [role, setRole] = useState<AppRole | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      setRole((data?.role as AppRole) || null);
+    })();
+  }, []);
+
+  const isLender = role === "lender_admin" || role === "lender_analyst";
+  const isBorrower = role === "borrower_admin" || role === "borrower_user";
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
   return (
     <NotificationsProvider>
       {/* Skip link for keyboard/screen readers */}
@@ -88,25 +112,63 @@ export default function AppShell() {
             <Link to="/" className="text-2xl font-extrabold tracking-tight">
               SummitLine
             </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-muted" aria-label="Primary">
-              {tabs.map(t => {
-                const active = pathname.startsWith(t.to);
-                return (
+            <nav className="hidden md:flex items-center gap-6 text-sm text-muted overflow-x-auto" aria-label="Primary">
+              {isLender && (
+                <>
                   <Link
-                    key={t.to}
-                    to={t.to}
-                    aria-current={active ? 'page' : undefined}
-                    className={`hover:opacity-80 ${active ? 'font-semibold' : ''}`}
+                    to="/admin"
+                    aria-current={pathname.startsWith('/admin') ? 'page' : undefined}
+                    className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/admin') ? 'font-semibold' : ''}`}
                   >
-                    {t.label}
+                    Admin
                   </Link>
-                );
-              })}
+                  <Link
+                    to="/admin/dashboard"
+                    aria-current={pathname === '/admin/dashboard' ? 'page' : undefined}
+                    className={`hover:opacity-80 whitespace-nowrap ${pathname === '/admin/dashboard' ? 'font-semibold' : ''}`}
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    to="/admin/loans"
+                    aria-current={pathname.startsWith('/admin/loans') ? 'page' : undefined}
+                    className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/admin/loans') ? 'font-semibold' : ''}`}
+                  >
+                    Loans
+                  </Link>
+                  <Link
+                    to="/admin/reports"
+                    aria-current={pathname === '/admin/reports' ? 'page' : undefined}
+                    className={`hover:opacity-80 whitespace-nowrap ${pathname === '/admin/reports' ? 'font-semibold' : ''}`}
+                  >
+                    Reports
+                  </Link>
+                </>
+              )}
+              {isBorrower && (
+                <Link
+                  to="/borrower"
+                  aria-current={pathname.startsWith('/borrower') ? 'page' : undefined}
+                  className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/borrower') ? 'font-semibold' : ''}`}
+                >
+                  My Loans
+                </Link>
+              )}
             </nav>
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <CompactToggle />
             <BellMenu />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className="text-muted hover:text-white"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline ml-2">Sign out</span>
+            </Button>
           </div>
         </div>
         </header>

@@ -26,7 +26,18 @@ export default function Reports() {
       });
       return;
     }
-    downloadCSV(data || [], "gl_entries");
+    if (!data || data.length === 0) {
+      toast({
+        title: "No data",
+        description: "No GL entries found for the selected period.",
+      });
+      return;
+    }
+    downloadCSV(data, "gl_entries");
+    toast({
+      title: "Export complete",
+      description: "GL entries downloaded successfully.",
+    });
   }
 
   async function exportPayments() {
@@ -44,7 +55,18 @@ export default function Reports() {
       });
       return;
     }
-    downloadCSV(data || [], "payment_register");
+    if (!data || data.length === 0) {
+      toast({
+        title: "No data",
+        description: "No payments found for the selected period.",
+      });
+      return;
+    }
+    downloadCSV(data, "payment_register");
+    toast({
+      title: "Export complete",
+      description: "Payment register downloaded successfully.",
+    });
   }
 
   async function exportBorrowerActivity() {
@@ -62,7 +84,18 @@ export default function Reports() {
       });
       return;
     }
-    downloadCSV(data || [], "borrower_activity");
+    if (!data || data.length === 0) {
+      toast({
+        title: "No data",
+        description: "No borrower activity found for the selected period.",
+      });
+      return;
+    }
+    downloadCSV(data, "borrower_activity");
+    toast({
+      title: "Export complete",
+      description: "Borrower activity downloaded successfully.",
+    });
   }
 
   return (
@@ -155,8 +188,7 @@ function lastOfPrevMonth(d = new Date()) {
 
 function downloadCSV(rows: any[], name: string) {
   if (!rows.length) {
-    alert("No rows for selected period.");
-    return;
+    return; // Toast will be shown by caller
   }
   const headers = Object.keys(rows[0]);
   const lines = rows.map((r) => headers.map((h) => csvSafe(r[h])).join(","));

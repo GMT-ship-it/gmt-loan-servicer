@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppShell from "./components/AppShell";
+import { Guard } from "./components/Guard";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Portal from "./pages/Portal";
@@ -31,15 +33,69 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/portal" element={<Portal />} />
           <Route element={<AppShell />}>
-            <Route path="/admin" element={<Admin />} />
-            <Route path="/admin/covenants" element={<AdminCovenants />} />
-            <Route path="/admin/loans" element={<AdminLoans />} />
-            <Route path="/admin/loans/:id" element={<AdminLoanDetail />} />
-            <Route path="/admin/dashboard" element={<PortfolioDashboard />} />
-            <Route path="/admin/reports" element={<Reports />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/borrower" element={<Borrower />} />
-            <Route path="/portal/loans/:id" element={<BorrowerLoanDetail />} />
+            <Route path="/admin" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <Admin />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/covenants" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <AdminCovenants />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/loans" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <AdminLoans />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/loans/:id" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <AdminLoanDetail />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/dashboard" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <PortfolioDashboard />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/reports" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <Reports />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/analytics" element={
+              <ErrorBoundary>
+                <Guard need={["lender_admin", "lender_analyst"]}>
+                  <Analytics />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/borrower" element={
+              <ErrorBoundary>
+                <Guard need={["borrower_admin", "borrower_user"]}>
+                  <Borrower />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/portal/loans/:id" element={
+              <ErrorBoundary>
+                <Guard need={["borrower_admin", "borrower_user"]}>
+                  <BorrowerLoanDetail />
+                </Guard>
+              </ErrorBoundary>
+            } />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
