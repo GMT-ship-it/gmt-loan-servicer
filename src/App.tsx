@@ -9,6 +9,8 @@ import Login from "./pages/Login";
 import Portal from "./pages/Portal";
 import Admin from "./pages/Admin";
 import AdminCovenants from "./pages/AdminCovenants";
+import AdminLoans from "./pages/AdminLoans";
+import AdminLoanDetail from "./pages/AdminLoanDetail";
 import Analytics from "./pages/Analytics";
 import Borrower from "./pages/Borrower";
 import NotFound from "./pages/NotFound";
@@ -28,6 +30,8 @@ const App = () => (
           <Route element={<AppShell />}>
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/covenants" element={<AdminCovenants />} />
+            <Route path="/admin/loans" element={<AdminLoans />} />
+            <Route path="/admin/loans/:id" element={<AdminLoanDetail />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/borrower" element={<Borrower />} />
           </Route>
