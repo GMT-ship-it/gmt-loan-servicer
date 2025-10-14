@@ -1164,6 +1164,51 @@ export type Database = {
         }
         Relationships: []
       }
+      loan_recent_payments: {
+        Row: {
+          amount: number | null
+          fees: number | null
+          interest: number | null
+          loan_id: string | null
+          paid_date: string | null
+          payment_id: string | null
+          principal: number | null
+        }
+        Insert: {
+          amount?: number | null
+          fees?: never
+          interest?: never
+          loan_id?: string | null
+          paid_date?: never
+          payment_id?: string | null
+          principal?: never
+        }
+        Update: {
+          amount?: number | null
+          fees?: never
+          interest?: never
+          loan_id?: string | null
+          paid_date?: never
+          payment_id?: string | null
+          principal?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_delinquency_summary"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       accrue_interest_for_loan: {
@@ -1177,6 +1222,10 @@ export type Database = {
       apply_payment_waterfall: {
         Args: { p_payment_id: string }
         Returns: undefined
+      }
+      borrower_due_summary: {
+        Args: { p_asof: string; p_loan_id: string }
+        Returns: Json
       }
       evaluate_covenants: {
         Args: { p_facility: string }

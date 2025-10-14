@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FileDown } from "lucide-react";
+import jsPDF from "jspdf";
 
 type Statement = {
   id: string;
@@ -17,6 +21,8 @@ export default function BorrowerLoanDetail() {
   const [balances, setBalances] = useState<any | null>(null);
   const [statements, setStatements] = useState<Statement[]>([]);
   const [payoff, setPayoff] = useState<number | null>(null);
+  const [due, setDue] = useState<any | null>(null);
+  const [recentPayments, setRecentPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -94,6 +100,22 @@ export default function BorrowerLoanDetail() {
       });
       setPayoff(payoffVal ?? 0);
 
+      // Due summary
+      const { data: dueJson } = await supabase.rpc("borrower_due_summary", {
+        p_loan_id: id,
+        p_asof: todayISO,
+      });
+      setDue(dueJson || null);
+
+      // Recent payments
+      const { data: pays } = await supabase
+        .from("loan_recent_payments")
+        .select("*")
+        .eq("loan_id", id)
+        .order("paid_date", { ascending: false })
+        .limit(10);
+      setRecentPayments(pays || []);
+
       setLoading(false);
     })();
   }, [id, todayISO]);
@@ -123,31 +145,91 @@ export default function BorrowerLoanDetail() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* Amount Due Section */}
+      {due && (
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Payment Status</h2>
+          <div className="grid md:grid-cols-3 gap-4">
+            <CardStat
+              label="Amount Due Today"
+              value={Number(due.amount_due_today || 0)}
+              money
+            />
+            <CardStat
+              label="Past-Due Amount"
+              value={Number(due.past_due_amount || 0)}
+              money
+            />
+            <CardStat
+              label="Next Due Date"
+              value={
+                due.next_due_date
+                  ? new Date(due.next_due_date).toLocaleDateString()
+                  : "—"
+              }
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Recent Payments */}
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Recent Payments</h2>
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground mb-1">
-              Next Due Date
-            </div>
-            <div className="text-2xl font-semibold mb-2">
-              {formatDate(estimateNextDue(loan))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              (Simple estimate based on first payment date + frequency)
-            </p>
-          </CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/50">
+                <tr>
+                  <th className="p-4 text-left font-medium">Date</th>
+                  <th className="p-4 text-right font-medium">Amount</th>
+                  <th className="p-4 text-right font-medium">Principal</th>
+                  <th className="p-4 text-right font-medium">Interest</th>
+                  <th className="p-4 text-right font-medium">Fees</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentPayments.map((r) => (
+                  <tr key={r.payment_id} className="border-b border-border">
+                    <td className="p-4">
+                      {new Date(r.paid_date).toLocaleDateString()}
+                    </td>
+                    <td className="p-4 text-right font-mono">
+                      {formatMoney(Number(r.amount))}
+                    </td>
+                    <td className="p-4 text-right font-mono">
+                      {formatMoney(Number(r.principal))}
+                    </td>
+                    <td className="p-4 text-right font-mono">
+                      {formatMoney(Number(r.interest))}
+                    </td>
+                    <td className="p-4 text-right font-mono">
+                      {formatMoney(Number(r.fees))}
+                    </td>
+                  </tr>
+                ))}
+                {recentPayments.length === 0 && (
+                  <tr>
+                    <td
+                      className="p-4 text-muted-foreground text-center"
+                      colSpan={5}
+                    >
+                      No payments recorded yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-sm text-muted-foreground mb-1">
-              Payoff Quote (as of {formatDate(todayISO)})
-            </div>
-            <div className="text-2xl font-semibold">
-              {formatMoney(payoff ?? 0)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      </section>
+
+      {/* Payoff Letter Generator */}
+      {loan && balances && (
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Payoff Letter</h2>
+          <PayoffLetter loan={loan} balances={balances} payoff={payoff ?? 0} />
+        </section>
+      )}
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Statements</h2>
@@ -250,17 +332,83 @@ function formatPeriod(a: string, b: string) {
   return `${formatDate(a)} – ${formatDate(b)}`;
 }
 
-function estimateNextDue(loan: any) {
-  // naive compute: advance from first_payment_date by frequency until >= today
-  const first = new Date(loan.first_payment_date);
-  const now = new Date();
-  const stepDays =
-    loan.payment_frequency === "weekly"
-      ? 7
-      : loan.payment_frequency === "biweekly"
-      ? 14
-      : 30; // monthly rough; can replace with exact calendar logic later
-  let d = new Date(first);
-  while (d < now) d = new Date(d.getTime() + stepDays * 24 * 3600 * 1000);
-  return d;
+function PayoffLetter({
+  loan,
+  balances,
+  payoff,
+}: {
+  loan: any;
+  balances: any;
+  payoff: number;
+}) {
+  const [asOf, setAsOf] = useState<string>(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [busy, setBusy] = useState(false);
+
+  async function generate() {
+    try {
+      setBusy(true);
+      // Get payoff for the selected date
+      const { data: payoffQuote } = await supabase.rpc("payoff_quote", {
+        p_loan_id: loan.id,
+        p_asof: asOf,
+      });
+
+      const doc = new jsPDF();
+      doc.setFontSize(14);
+      doc.text("Payoff Letter", 14, 16);
+      doc.setFontSize(10);
+      doc.text(`Loan #${loan.loan_number}`, 14, 22);
+      doc.text(`As of: ${new Date(asOf).toLocaleDateString()}`, 14, 27);
+      doc.text(`Borrower: (on file)`, 14, 32);
+
+      const lines = [
+        `Principal Outstanding: ${formatMoney(balances.principal)}`,
+        `Accrued Interest (approx.): ${formatMoney(balances.accrued_interest)}`,
+        `Fees Due: ${formatMoney(balances.fees)}`,
+        `Unapplied Cash: ${formatMoney(balances.unapplied)}`,
+        `------------------------------------`,
+        `Total Payoff (as of ${new Date(asOf).toLocaleDateString()}): ${formatMoney(payoffQuote || 0)}`,
+        ``,
+        `This payoff quote is valid for the date indicated above and may change due to additional accruals,`,
+        `fees, payments, or disbursements. Please contact Mountain Investments to remit payoff funds.`,
+      ];
+      let y = 42;
+      lines.forEach((l) => {
+        doc.text(l, 14, y);
+        y += 6;
+      });
+
+      doc.save(`Payoff_${loan.loan_number}_${asOf}.pdf`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6 space-y-4">
+        <div className="text-sm text-muted-foreground">
+          Generate a payoff letter for a specific date
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Input
+            type="date"
+            value={asOf}
+            onChange={(e) => setAsOf(e.target.value)}
+            className="max-w-xs"
+          />
+          <Button onClick={generate} disabled={busy}>
+            <FileDown className="w-4 h-4 mr-2" />
+            {busy ? "Generating…" : "Download PDF"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          This generates a borrower-facing payoff letter locally (not stored).
+          Admin PDFs are stored in Statements.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
