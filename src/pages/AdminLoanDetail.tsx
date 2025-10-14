@@ -7,6 +7,7 @@ import { ArrowLeft, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { LateFeesPanel } from "@/components/loans/LateFeesPanel";
 
 export default function AdminLoanDetail() {
   const { id } = useParams();
@@ -533,6 +534,8 @@ export default function AdminLoanDetail() {
       )}
 
       <EscrowSettings loan={loan} onRefresh={loadData} />
+
+      <LateFeesPanel loanId={loan.id} />
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>

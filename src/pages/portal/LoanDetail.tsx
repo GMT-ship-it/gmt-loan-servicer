@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileDown } from "lucide-react";
 import jsPDF from "jspdf";
+import { LateFeesPanel } from "@/components/loans/LateFeesPanel";
 
 type Statement = {
   id: string;
@@ -207,6 +208,9 @@ export default function BorrowerLoanDetail() {
           </div>
         </section>
       )}
+
+      {/* Late Fees (read-only for borrowers) */}
+      <LateFeesPanel loanId={id!} />
 
       {/* Recent Payments */}
       <section className="space-y-4">

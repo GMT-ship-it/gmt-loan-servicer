@@ -14,6 +14,67 @@ export type Database = {
   }
   public: {
     Tables: {
+      assessed_fees: {
+        Row: {
+          amount: number
+          assessed_date: string
+          created_at: string | null
+          due_date: string
+          id: string
+          installment_no: number
+          journal_entry_id: number | null
+          loan_id: string | null
+          status: string | null
+          waiver_journal_entry_id: number | null
+        }
+        Insert: {
+          amount: number
+          assessed_date: string
+          created_at?: string | null
+          due_date: string
+          id?: string
+          installment_no: number
+          journal_entry_id?: number | null
+          loan_id?: string | null
+          status?: string | null
+          waiver_journal_entry_id?: number | null
+        }
+        Update: {
+          amount?: number
+          assessed_date?: string
+          created_at?: string | null
+          due_date?: string
+          id?: string
+          installment_no?: number
+          journal_entry_id?: number | null
+          loan_id?: string | null
+          status?: string | null
+          waiver_journal_entry_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assessed_fees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_delinquency_summary"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "assessed_fees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessed_fees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1392,6 +1453,10 @@ export type Database = {
         Args: { p_payment_id: string }
         Returns: undefined
       }
+      assess_late_fees_asof: {
+        Args: { p_asof: string }
+        Returns: undefined
+      }
       borrower_due_summary: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: Json
@@ -1469,6 +1534,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      installment_unpaid: {
+        Args: { p_asof: string; p_installment_no: number; p_loan_id: string }
+        Returns: boolean
+      }
       is_admin_or_analyst: {
         Args: { _user_id: string }
         Returns: boolean
@@ -1480,6 +1549,10 @@ export type Database = {
       is_lender: {
         Args: { uid: string }
         Returns: boolean
+      }
+      late_fee_amount_for_installment: {
+        Args: { p_installment_no: number; p_loan_id: string }
+        Returns: number
       }
       lender_exposure_snapshot: {
         Args: Record<PropertyKey, never>
@@ -1554,6 +1627,13 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      scheduled_vs_paid: {
+        Args: { p_asof: string; p_loan_id: string }
+        Returns: {
+          total_paid: number
+          total_scheduled: number
+        }[]
+      }
       statement_header: {
         Args: { p_end: string; p_facility: string; p_start: string }
         Returns: {
@@ -1573,6 +1653,10 @@ export type Database = {
           type: Database["public"]["Enums"]["txn_type"]
         }[]
       }
+      sync_assessed_fees_paid: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       user_customer_id: {
         Args: { uid: string }
         Returns: string
@@ -1589,6 +1673,10 @@ export type Database = {
           principal: number
           utilization_pct: number
         }[]
+      }
+      waive_late_fee: {
+        Args: { p_fee_id: string; p_memo?: string; p_waiver_date: string }
+        Returns: undefined
       }
     }
     Enums: {
