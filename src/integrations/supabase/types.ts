@@ -47,6 +47,83 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: number
+          new_values: Json | null
+          old_values: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: number
+          new_values?: Json | null
+          old_values?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: number
+          new_values?: Json | null
+          old_values?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      borrowers: {
+        Row: {
+          address: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string
+          id: string
+          legal_name: string
+          organization_id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email: string
+          id?: string
+          legal_name: string
+          organization_id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string
+          id?: string
+          legal_name?: string
+          organization_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borrowers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       borrowing_base_items: {
         Row: {
           amount: number
@@ -325,6 +402,73 @@ export type Database = {
           },
         ]
       }
+      escrow_accounts: {
+        Row: {
+          balance: number | null
+          created_at: string
+          id: string
+          loan_id: string
+        }
+        Insert: {
+          balance?: number | null
+          created_at?: string
+          id?: string
+          loan_id: string
+        }
+        Update: {
+          balance?: number | null
+          created_at?: string
+          id?: string
+          loan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escrow_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          escrow_id: string
+          id: string
+          kind: string
+          memo: string | null
+          tx_date: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          escrow_id: string
+          id?: string
+          kind: string
+          memo?: string | null
+          tx_date: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          escrow_id?: string
+          id?: string
+          kind?: string
+          memo?: string | null
+          tx_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escrow_transactions_escrow_id_fkey"
+            columns: ["escrow_id"]
+            isOneToOne: false
+            referencedRelation: "escrow_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       facilities: {
         Row: {
           apr: number
@@ -419,6 +563,216 @@ export type Database = {
           },
         ]
       }
+      journal_entries: {
+        Row: {
+          account_code: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          id: number
+          loan_id: string | null
+          memo: string | null
+          organization_id: string
+        }
+        Insert: {
+          account_code: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          entry_date: string
+          id?: number
+          loan_id?: string | null
+          memo?: string | null
+          organization_id: string
+        }
+        Update: {
+          account_code?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: number
+          loan_id?: string | null
+          memo?: string | null
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journal_entries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loan_documents: {
+        Row: {
+          created_at: string
+          doc_type: string
+          file_path: string
+          id: string
+          loan_id: string | null
+          organization_id: string
+          parsed_json: Json | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          doc_type: string
+          file_path: string
+          id?: string
+          loan_id?: string | null
+          organization_id: string
+          parsed_json?: Json | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          file_path?: string
+          id?: string
+          loan_id?: string | null
+          organization_id?: string
+          parsed_json?: Json | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loan_documents_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          amortization_type: string
+          balloon_amount: number | null
+          balloon_date: string | null
+          borrower_id: string
+          compounding_basis: string
+          covenants: Json | null
+          created_at: string
+          deleted_at: string | null
+          escrow_rules: Json | null
+          first_payment_date: string
+          grace_days: number | null
+          id: string
+          index_name: string | null
+          interest_only_months: number | null
+          interest_rate: number
+          late_fee_amount: number | null
+          late_fee_type: string | null
+          loan_number: string
+          margin: number | null
+          organization_id: string
+          origination_fee: number | null
+          payment_frequency: string
+          prepayment_penalty_rule: Json | null
+          principal: number
+          rate_type: string
+          servicing_fee: number | null
+          status: string
+          term_months: number
+          updated_at: string
+        }
+        Insert: {
+          amortization_type?: string
+          balloon_amount?: number | null
+          balloon_date?: string | null
+          borrower_id: string
+          compounding_basis?: string
+          covenants?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          escrow_rules?: Json | null
+          first_payment_date: string
+          grace_days?: number | null
+          id?: string
+          index_name?: string | null
+          interest_only_months?: number | null
+          interest_rate: number
+          late_fee_amount?: number | null
+          late_fee_type?: string | null
+          loan_number: string
+          margin?: number | null
+          organization_id: string
+          origination_fee?: number | null
+          payment_frequency?: string
+          prepayment_penalty_rule?: Json | null
+          principal: number
+          rate_type?: string
+          servicing_fee?: number | null
+          status?: string
+          term_months: number
+          updated_at?: string
+        }
+        Update: {
+          amortization_type?: string
+          balloon_amount?: number | null
+          balloon_date?: string | null
+          borrower_id?: string
+          compounding_basis?: string
+          covenants?: Json | null
+          created_at?: string
+          deleted_at?: string | null
+          escrow_rules?: Json | null
+          first_payment_date?: string
+          grace_days?: number | null
+          id?: string
+          index_name?: string | null
+          interest_only_months?: number | null
+          interest_rate?: number
+          late_fee_amount?: number | null
+          late_fee_type?: string | null
+          loan_number?: string
+          margin?: number | null
+          organization_id?: string
+          origination_fee?: number | null
+          payment_frequency?: string
+          prepayment_penalty_rule?: Json | null
+          principal?: number
+          rate_type?: string
+          servicing_fee?: number | null
+          status?: string
+          term_months?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loans_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null
@@ -452,6 +806,122 @@ export type Database = {
         }
         Relationships: []
       }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      payment_methods: {
+        Row: {
+          borrower_id: string
+          brand: string | null
+          created_at: string
+          id: string
+          last4: string | null
+          provider: string
+          provider_ref: string
+          status: string | null
+        }
+        Insert: {
+          borrower_id: string
+          brand?: string | null
+          created_at?: string
+          id?: string
+          last4?: string | null
+          provider: string
+          provider_ref: string
+          status?: string | null
+        }
+        Update: {
+          borrower_id?: string
+          brand?: string | null
+          created_at?: string
+          id?: string
+          last4?: string | null
+          provider?: string
+          provider_ref?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          borrower_id: string
+          breakdown: Json | null
+          created_at: string
+          id: string
+          loan_id: string
+          provider: string | null
+          provider_payment_id: string | null
+          received_at: string | null
+          status: string | null
+        }
+        Insert: {
+          amount: number
+          borrower_id: string
+          breakdown?: Json | null
+          created_at?: string
+          id?: string
+          loan_id: string
+          provider?: string | null
+          provider_payment_id?: string | null
+          received_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          amount?: number
+          borrower_id?: string
+          breakdown?: Json | null
+          created_at?: string
+          id?: string
+          loan_id?: string
+          provider?: string | null
+          provider_payment_id?: string | null
+          received_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_borrower_id_fkey"
+            columns: ["borrower_id"]
+            isOneToOne: false
+            referencedRelation: "borrowers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -459,7 +929,6 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean
-          role: Database["public"]["Enums"]["app_role"]
         }
         Insert: {
           created_at?: string
@@ -467,7 +936,6 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean
-          role?: Database["public"]["Enums"]["app_role"]
         }
         Update: {
           created_at?: string
@@ -475,9 +943,43 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean
-          role?: Database["public"]["Enums"]["app_role"]
         }
         Relationships: []
+      }
+      statements: {
+        Row: {
+          created_at: string
+          id: string
+          loan_id: string
+          pdf_path: string
+          period_end: string
+          period_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          loan_id: string
+          pdf_path: string
+          period_end: string
+          period_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          loan_id?: string
+          pdf_path?: string
+          period_end?: string
+          period_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "statements_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -526,6 +1028,38 @@ export type Database = {
             columns: ["facility_id"]
             isOneToOne: false
             referencedRelation: "facilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -583,6 +1117,17 @@ export type Database = {
           region: string
           sector: Database["public"]["Enums"]["industry_sector"]
         }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin_or_analyst: {
+        Args: { _user_id: string }
+        Returns: boolean
       }
       is_borrower: {
         Args: { uid: string }
@@ -668,6 +1213,10 @@ export type Database = {
         Args: { uid: string }
         Returns: string
       }
+      user_organization_id: {
+        Args: { _user_id: string }
+        Returns: string
+      }
       utilization_timeseries: {
         Args: { p_days?: number; p_facility: string }
         Returns: {
@@ -679,11 +1228,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role:
-        | "lender_admin"
-        | "lender_analyst"
-        | "borrower_admin"
-        | "borrower_user"
+      app_role: "admin" | "analyst" | "borrower"
       bbc_item_type: "accounts_receivable" | "inventory" | "cash" | "other"
       bbc_status:
         | "draft"
@@ -837,12 +1382,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: [
-        "lender_admin",
-        "lender_analyst",
-        "borrower_admin",
-        "borrower_user",
-      ],
+      app_role: ["admin", "analyst", "borrower"],
       bbc_item_type: ["accounts_receivable", "inventory", "cash", "other"],
       bbc_status: [
         "draft",
