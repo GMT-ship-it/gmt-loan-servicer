@@ -314,7 +314,10 @@ const Index = () => {
                 <p className="text-muted-foreground mb-8 leading-relaxed">
                   Access flexible capital to fuel your growth. Our streamlined process and experienced team make financing simple.
                 </p>
-                <button className="btn-primary w-full">
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="btn-primary w-full"
+                >
                   Apply for Financing <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
@@ -334,7 +337,10 @@ const Index = () => {
                 <p className="text-muted-foreground mb-8 leading-relaxed">
                   Diversify your portfolio with attractive risk-adjusted returns. Join institutional investors who trust our platform.
                 </p>
-                <button className="btn-primary w-full">
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="btn-primary w-full"
+                >
                   Become an Investor <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
