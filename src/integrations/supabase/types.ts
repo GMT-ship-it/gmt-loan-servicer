@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      adjustments: {
+        Row: {
+          adj_date: string
+          amount: number
+          created_at: string | null
+          created_by: string | null
+          id: string
+          journal_entry_id: number | null
+          kind: string
+          loan_id: string | null
+          memo: string | null
+        }
+        Insert: {
+          adj_date: string
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: number | null
+          kind: string
+          loan_id?: string | null
+          memo?: string | null
+        }
+        Update: {
+          adj_date?: string
+          amount?: number
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: number | null
+          kind?: string
+          loan_id?: string | null
+          memo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adjustments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "adjustments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_delinquency_summary"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "adjustments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       assessed_fees: {
         Row: {
           amount: number
@@ -52,6 +117,13 @@ export type Database = {
           waiver_journal_entry_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "assessed_fees_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "assessed_fees_loan_id_fkey"
             columns: ["loan_id"]
@@ -487,6 +559,13 @@ export type Database = {
             foreignKeyName: "escrow_accounts_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loan_delinquency_summary"
             referencedColumns: ["loan_id"]
           },
@@ -529,6 +608,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "escrow_settings_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "escrow_settings_loan_id_fkey"
             columns: ["loan_id"]
@@ -730,6 +816,13 @@ export type Database = {
             foreignKeyName: "journal_entries_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "journal_entries_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loan_delinquency_summary"
             referencedColumns: ["loan_id"]
           },
@@ -788,6 +881,13 @@ export type Database = {
           uploaded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "loan_documents_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "loan_documents_loan_id_fkey"
             columns: ["loan_id"]
@@ -857,6 +957,13 @@ export type Database = {
             foreignKeyName: "loan_schedules_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "loan_schedules_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loan_delinquency_summary"
             referencedColumns: ["loan_id"]
           },
@@ -900,6 +1007,7 @@ export type Database = {
           late_fee_type: string | null
           loan_number: string
           margin: number | null
+          non_accrual: boolean | null
           organization_id: string
           origination_fee: number | null
           payment_frequency: string
@@ -934,6 +1042,7 @@ export type Database = {
           late_fee_type?: string | null
           loan_number: string
           margin?: number | null
+          non_accrual?: boolean | null
           organization_id: string
           origination_fee?: number | null
           payment_frequency?: string
@@ -968,6 +1077,7 @@ export type Database = {
           late_fee_type?: string | null
           loan_number?: string
           margin?: number | null
+          non_accrual?: boolean | null
           organization_id?: string
           origination_fee?: number | null
           payment_frequency?: string
@@ -1140,6 +1250,13 @@ export type Database = {
             foreignKeyName: "payments_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loan_delinquency_summary"
             referencedColumns: ["loan_id"]
           },
@@ -1209,6 +1326,13 @@ export type Database = {
           period_start?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "statements_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "statements_loan_id_fkey"
             columns: ["loan_id"]
@@ -1330,6 +1454,13 @@ export type Database = {
             foreignKeyName: "escrow_accounts_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "escrow_accounts_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
             referencedRelation: "loan_delinquency_summary"
             referencedColumns: ["loan_id"]
           },
@@ -1348,6 +1479,33 @@ export type Database = {
             referencedColumns: ["loan_id"]
           },
         ]
+      }
+      loan_balances_snapshot: {
+        Row: {
+          escrow_payable: number | null
+          fee_receivable: number | null
+          interest_receivable: number | null
+          loan_id: string | null
+          principal_outstanding: number | null
+          unapplied_cash: number | null
+        }
+        Insert: {
+          escrow_payable?: never
+          fee_receivable?: never
+          interest_receivable?: never
+          loan_id?: string | null
+          principal_outstanding?: never
+          unapplied_cash?: never
+        }
+        Update: {
+          escrow_payable?: never
+          fee_receivable?: never
+          interest_receivable?: never
+          loan_id?: string | null
+          principal_outstanding?: never
+          unapplied_cash?: never
+        }
+        Relationships: []
       }
       loan_delinquency_summary: {
         Row: {
@@ -1390,6 +1548,13 @@ export type Database = {
           principal?: never
         }
         Relationships: [
+          {
+            foreignKeyName: "payments_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loan_balances_snapshot"
+            referencedColumns: ["loan_id"]
+          },
           {
             foreignKeyName: "payments_loan_id_fkey"
             columns: ["loan_id"]
@@ -1460,6 +1625,10 @@ export type Database = {
       borrower_due_summary: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: Json
+      }
+      charge_off_loan: {
+        Args: { p_co_date: string; p_loan_id: string; p_memo?: string }
+        Returns: undefined
       }
       escrow_post_transaction: {
         Args: {
@@ -1591,6 +1760,16 @@ export type Database = {
           message: string
           severity: string
         }[]
+      }
+      post_adjustment: {
+        Args: {
+          p_adj_date: string
+          p_amount: number
+          p_kind: string
+          p_loan_id: string
+          p_memo?: string
+        }
+        Returns: undefined
       }
       post_interest_all_active: {
         Args: { p_as_of?: string }

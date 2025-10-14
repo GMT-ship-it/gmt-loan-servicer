@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { LateFeesPanel } from "@/components/loans/LateFeesPanel";
+import { AdjustmentsPanel } from "@/components/loans/AdjustmentsPanel";
+import { ChargeOffCard } from "@/components/loans/ChargeOffCard";
 
 export default function AdminLoanDetail() {
   const { id } = useParams();
@@ -536,6 +538,10 @@ export default function AdminLoanDetail() {
       <EscrowSettings loan={loan} onRefresh={loadData} />
 
       <LateFeesPanel loanId={loan.id} onRefresh={loadData} />
+
+      <AdjustmentsPanel loanId={loan.id} onRefresh={loadData} />
+
+      <ChargeOffCard loan={loan} onRefresh={loadData} />
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>
