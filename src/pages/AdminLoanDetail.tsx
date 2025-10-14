@@ -20,6 +20,7 @@ export default function AdminLoanDetail() {
   const [amount, setAmount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [genBusy, setGenBusy] = useState(false);
+  const [dlq, setDlq] = useState<any | null>(null);
 
   useEffect(() => {
     loadData();
@@ -92,6 +93,14 @@ export default function AdminLoanDetail() {
         .order("entry_date", { ascending: false })
         .limit(50);
       setEntries(je || []);
+
+      // Fetch delinquency summary
+      const { data: dlqData } = await supabase
+        .from('loan_delinquency_summary')
+        .select('*')
+        .eq('loan_id', id)
+        .maybeSingle();
+      setDlq(dlqData || null);
     } catch (err) {
       console.error("Error loading loan:", err);
       toast({
@@ -394,6 +403,40 @@ export default function AdminLoanDetail() {
         </section>
       )}
 
+      {/* Delinquency Status */}
+      {dlq && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Delinquency Status</h2>
+          <div className="grid md:grid-cols-4 gap-3">
+            <StatCard 
+              label="Next Due Date" 
+              value={dlq.next_due_date ? new Date(dlq.next_due_date).toLocaleDateString() : '—'} 
+            />
+            <StatCard 
+              label="Past-Due Amount" 
+              value={Number(dlq.past_due_amount || 0)} 
+              money 
+            />
+            <StatCard 
+              label="Days Past Due" 
+              value={dlq.days_past_due ?? 0} 
+            />
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="text-xs text-muted-foreground uppercase tracking-wide">Bucket</div>
+              <div className={`text-2xl font-semibold mt-2 ${
+                dlq.bucket === 'CURRENT' 
+                  ? 'text-emerald-600' 
+                  : dlq.bucket === '1-30' 
+                  ? 'text-yellow-600' 
+                  : 'text-rose-600'
+              }`}>
+                {dlq.bucket}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>
         <div className="flex gap-3">
@@ -459,15 +502,28 @@ export default function AdminLoanDetail() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Statements</h2>
-          <Button
-            onClick={generateMonthlyStatement}
-            disabled={genBusy}
-            variant="outline"
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            {genBusy ? "Generating..." : "Generate Prior-Month Statement"}
-          </Button>
+          <h2 className="text-xl font-semibold">Actions</h2>
+          <div className="flex gap-3">
+            <Button
+              onClick={generateMonthlyStatement}
+              disabled={genBusy}
+              variant="outline"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              {genBusy ? "Generating..." : "Generate Prior-Month Statement"}
+            </Button>
+            <Button 
+              onClick={async () => {
+                if (!loan?.id) return;
+                await supabase.rpc('generate_monthly_schedule', { p_loan_id: loan.id });
+                toast({ title: "Schedule Regenerated", description: "Loan payment schedule has been regenerated" });
+                loadData();
+              }} 
+              variant="outline"
+            >
+              Regenerate Schedule
+            </Button>
+          </div>
         </div>
       </section>
 
