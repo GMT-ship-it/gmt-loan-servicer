@@ -13,6 +13,8 @@ export default function AdminLoanDetail() {
   const [loan, setLoan] = useState<any>(null);
   const [borrower, setBorrower] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
+  const [balances, setBalances] = useState<any>(null);
+  const [entries, setEntries] = useState<any[]>([]);
   const [amount, setAmount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +49,46 @@ export default function AdminLoanDetail() {
         .order("created_at", { ascending: false });
 
       setPayments(paymentsData || []);
+
+      // Balances: call Postgres RPC helpers (principal_outstanding etc.)
+      const { data: principalData } = await supabase.rpc("principal_outstanding", { p_loan_id: id });
+      const { data: intDue } = await supabase
+        .from("journal_entries")
+        .select("amount")
+        .eq("loan_id", id)
+        .eq("account_code", "INTEREST_RECEIVABLE");
+      const { data: feeDue } = await supabase
+        .from("journal_entries")
+        .select("amount")
+        .eq("loan_id", id)
+        .eq("account_code", "FEE_RECEIVABLE");
+      const { data: escrow } = await supabase
+        .from("escrow_accounts")
+        .select("balance")
+        .eq("loan_id", id)
+        .maybeSingle();
+      const { data: unapplied } = await supabase
+        .from("journal_entries")
+        .select("amount")
+        .eq("loan_id", id)
+        .eq("account_code", "UNAPPLIED_CASH");
+
+      setBalances({
+        principal: principalData ?? 0,
+        accrued_interest: intDue?.reduce((s, v) => s + Number(v.amount), 0) ?? 0,
+        fees: feeDue?.reduce((s, v) => s + Number(v.amount), 0) ?? 0,
+        escrow: escrow?.balance ?? 0,
+        unapplied: unapplied?.reduce((s, v) => s + Number(v.amount), 0) ?? 0,
+      });
+
+      // Journal history
+      const { data: je } = await supabase
+        .from("journal_entries")
+        .select("*")
+        .eq("loan_id", id)
+        .order("entry_date", { ascending: false })
+        .limit(50);
+      setEntries(je || []);
     } catch (err) {
       console.error("Error loading loan:", err);
       toast({
@@ -142,6 +184,19 @@ export default function AdminLoanDetail() {
         />
       </div>
 
+      {balances && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Current Balances</h2>
+          <div className="grid md:grid-cols-5 gap-3">
+            <StatCard label="Principal Outstanding" value={balances.principal} money />
+            <StatCard label="Accrued Interest" value={balances.accrued_interest} money />
+            <StatCard label="Fees Due" value={balances.fees} money />
+            <StatCard label="Escrow Balance" value={balances.escrow} money />
+            <StatCard label="Unapplied Cash" value={balances.unapplied} money />
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Post Payment</h2>
         <div className="flex gap-3">
@@ -197,6 +252,45 @@ export default function AdminLoanDetail() {
                     <td className="p-4 text-muted-foreground">
                       {payment.breakdown ? JSON.stringify(payment.breakdown) : "—"}
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Journal Entries</h2>
+        {entries.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No journal entries yet
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/50">
+                <tr>
+                  <th className="p-4 text-left font-medium">Date</th>
+                  <th className="p-4 text-left font-medium">Account</th>
+                  <th className="p-4 text-right font-medium">Amount</th>
+                  <th className="p-4 text-left font-medium">Memo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => (
+                  <tr key={e.id} className="border-b border-border">
+                    <td className="p-4">
+                      {new Date(e.entry_date).toLocaleDateString()}
+                    </td>
+                    <td className="p-4 font-mono text-xs">{e.account_code}</td>
+                    <td className="p-4 text-right font-mono">
+                      {Number(e.amount).toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "USD",
+                      })}
+                    </td>
+                    <td className="p-4 text-muted-foreground">{e.memo}</td>
                   </tr>
                 ))}
               </tbody>
