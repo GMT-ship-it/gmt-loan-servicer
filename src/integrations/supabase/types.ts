@@ -445,6 +445,52 @@ export type Database = {
           },
         ]
       }
+      escrow_settings: {
+        Row: {
+          cushion_months: number | null
+          loan_id: string
+          proj_ins_annual: number | null
+          proj_tax_annual: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          cushion_months?: number | null
+          loan_id: string
+          proj_ins_annual?: number | null
+          proj_tax_annual?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          cushion_months?: number | null
+          loan_id?: string
+          proj_ins_annual?: number | null
+          proj_tax_annual?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escrow_settings_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
+            referencedRelation: "loan_delinquency_summary"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "escrow_settings_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
+            referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escrow_settings_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: true
+            referencedRelation: "portfolio_dashboard"
+            referencedColumns: ["loan_id"]
+          },
+        ]
+      }
       escrow_transactions: {
         Row: {
           amount: number
@@ -716,6 +762,7 @@ export type Database = {
           amount_due: number
           created_at: string | null
           due_date: string
+          escrow_portion: number | null
           id: string
           installment_no: number
           interest_portion: number
@@ -726,6 +773,7 @@ export type Database = {
           amount_due: number
           created_at?: string | null
           due_date: string
+          escrow_portion?: number | null
           id?: string
           installment_no: number
           interest_portion?: number
@@ -736,6 +784,7 @@ export type Database = {
           amount_due?: number
           created_at?: string | null
           due_date?: string
+          escrow_portion?: number | null
           id?: string
           installment_no?: number
           interest_portion?: number
@@ -776,6 +825,8 @@ export type Database = {
           covenants: Json | null
           created_at: string
           deleted_at: string | null
+          escrow_cushion_required: number | null
+          escrow_monthly_required: number | null
           escrow_rules: Json | null
           first_payment_date: string
           grace_days: number | null
@@ -808,6 +859,8 @@ export type Database = {
           covenants?: Json | null
           created_at?: string
           deleted_at?: string | null
+          escrow_cushion_required?: number | null
+          escrow_monthly_required?: number | null
           escrow_rules?: Json | null
           first_payment_date: string
           grace_days?: number | null
@@ -840,6 +893,8 @@ export type Database = {
           covenants?: Json | null
           created_at?: string
           deleted_at?: string | null
+          escrow_cushion_required?: number | null
+          escrow_monthly_required?: number | null
           escrow_rules?: Json | null
           first_payment_date?: string
           grace_days?: number | null
@@ -1350,6 +1405,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      escrow_shortage_surplus: {
+        Args: { p_loan_id: string }
+        Returns: Json
+      }
       evaluate_covenants: {
         Args: { p_facility: string }
         Returns: undefined
@@ -1486,6 +1545,10 @@ export type Database = {
       recalc_bbc_header: {
         Args: { p_report: string }
         Returns: undefined
+      }
+      recalc_escrow_requirements: {
+        Args: { p_loan_id: string }
+        Returns: Json
       }
       run_daily_interest_accrual: {
         Args: Record<PropertyKey, never>
