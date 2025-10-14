@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowRight, Shield, TrendingUp, Users, 
-  Building2, Briefcase, Smartphone, Network,
-  LineChart, FileText, Mail, CheckCircle2
+  Building2, Briefcase, Smartphone,
+  LineChart, Mail, CheckCircle2
 } from 'lucide-react';
 import { HeroAnimation } from '@/components/landing/HeroAnimation';
 import { MetricCard } from '@/components/landing/MetricCard';
@@ -71,9 +71,9 @@ const Index = () => {
             </motion.div>
             
             <div className="grid grid-cols-2 gap-4">
-              <MetricCard value="$2.5B+" label="Assets Under Management" delay={0.2} />
+              <MetricCard value="$150M+" label="Assets Under Management" delay={0.2} />
               <MetricCard value="500+" label="Active Borrowers" delay={0.3} />
-              <MetricCard value="12%" label="Average Returns" delay={0.4} />
+              <MetricCard value="19%" label="Average Returns" delay={0.4} />
               <MetricCard value="98%" label="Client Retention" delay={0.5} />
             </div>
           </div>
@@ -168,7 +168,7 @@ const Index = () => {
               className="relative h-96 rounded-2xl overflow-hidden order-2 lg:order-1"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center">
-                <Network className="w-32 h-32 text-accent/40" />
+                <TrendingUp className="w-32 h-32 text-accent/40" />
               </div>
             </motion.div>
             
@@ -234,9 +234,9 @@ const Index = () => {
               delay={0.2}
             />
             <SolutionCard
-              icon={Network}
-              title="Healthcare"
-              description="Medical technology and services"
+              icon={Users}
+              title="Service Sector"
+              description="Business services and workforce solutions"
               delay={0.3}
             />
           </div>
