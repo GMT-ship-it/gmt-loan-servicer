@@ -679,6 +679,7 @@ export type Database = {
           index_name: string | null
           interest_only_months: number | null
           interest_rate: number
+          last_accrual_date: string | null
           late_fee_amount: number | null
           late_fee_type: string | null
           loan_number: string
@@ -710,6 +711,7 @@ export type Database = {
           index_name?: string | null
           interest_only_months?: number | null
           interest_rate: number
+          last_accrual_date?: string | null
           late_fee_amount?: number | null
           late_fee_type?: string | null
           loan_number: string
@@ -741,6 +743,7 @@ export type Database = {
           index_name?: string | null
           interest_only_months?: number | null
           interest_rate?: number
+          last_accrual_date?: string | null
           late_fee_amount?: number | null
           late_fee_type?: string | null
           loan_number?: string
@@ -1069,6 +1072,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accrue_interest_for_loan: {
+        Args: { p_asof: string; p_days: number; p_loan_id: string }
+        Returns: undefined
+      }
       apply_payment_waterfall: {
         Args: { p_payment_id: string }
         Returns: undefined
@@ -1190,8 +1197,16 @@ export type Database = {
         Args: { p_as_of: string; p_facility: string }
         Returns: number
       }
+      principal_outstanding: {
+        Args: { p_loan_id: string }
+        Returns: number
+      }
       recalc_bbc_header: {
         Args: { p_report: string }
+        Returns: undefined
+      }
+      run_daily_interest_accrual: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       statement_header: {
