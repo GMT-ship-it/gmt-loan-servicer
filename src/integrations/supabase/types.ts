@@ -1069,6 +1069,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_payment_waterfall: {
+        Args: { p_payment_id: string }
+        Returns: undefined
+      }
       evaluate_covenants: {
         Args: { p_facility: string }
         Returns: undefined
