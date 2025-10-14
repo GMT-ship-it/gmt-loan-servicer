@@ -559,6 +559,13 @@ export default function AdminPage() {
               >
                 Manage Covenants
               </Button>
+              <Button 
+                variant="outline" 
+                className="border-[var(--card-border)] text-[var(--text)] hover:bg-[var(--surface-2)] w-full sm:w-auto"
+                onClick={() => navigate('/admin/reports')}
+              >
+                Reports & Exports
+              </Button>
             </div>
           </div>
         </div>
