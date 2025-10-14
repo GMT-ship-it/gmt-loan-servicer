@@ -23,6 +23,7 @@ export default function BorrowerLoanDetail() {
   const [payoff, setPayoff] = useState<number | null>(null);
   const [due, setDue] = useState<any | null>(null);
   const [recentPayments, setRecentPayments] = useState<any[]>([]);
+  const [escCalc, setEscCalc] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
   const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -116,6 +117,12 @@ export default function BorrowerLoanDetail() {
         .limit(10);
       setRecentPayments(pays || []);
 
+      // Escrow shortage/surplus
+      const { data: escData } = await supabase.rpc("escrow_shortage_surplus", {
+        p_loan_id: id,
+      });
+      setEscCalc(escData || null);
+
       setLoading(false);
     })();
   }, [id, todayISO]);
@@ -167,6 +174,35 @@ export default function BorrowerLoanDetail() {
                   ? new Date(due.next_due_date).toLocaleDateString()
                   : "—"
               }
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Escrow Analysis */}
+      {escCalc && (
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Escrow Analysis</h2>
+          <div className="grid md:grid-cols-4 gap-4">
+            <CardStat
+              label="Monthly Required"
+              value={Number((escCalc as any).monthly_required || 0)}
+              money
+            />
+            <CardStat
+              label="Cushion Required"
+              value={Number((escCalc as any).cushion_required || 0)}
+              money
+            />
+            <CardStat
+              label="Shortage"
+              value={Number((escCalc as any).shortage || 0)}
+              money
+            />
+            <CardStat
+              label="Surplus"
+              value={Number((escCalc as any).surplus || 0)}
+              money
             />
           </div>
         </section>

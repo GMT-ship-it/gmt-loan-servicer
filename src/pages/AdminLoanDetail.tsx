@@ -258,6 +258,11 @@ export default function AdminLoanDetail() {
         escrowTx = escrowData || [];
       }
 
+      // Escrow shortage/surplus for statement
+      const { data: escInfo } = await supabase.rpc("escrow_shortage_surplus", {
+        p_loan_id: loan.id,
+      });
+
       // --- Build PDF ---
       const doc = new jsPDF();
 
@@ -318,6 +323,24 @@ export default function AdminLoanDetail() {
           ]),
           styles: { fontSize: 9 },
           theme: "striped",
+        });
+      }
+
+      // Escrow summary with shortage/surplus
+      if (escInfo) {
+        const esc = escInfo as any;
+        autoTable(doc, {
+          startY: (doc as any).lastAutoTable.finalY + 8,
+          head: [["Escrow", "Amount (USD)"]],
+          body: [
+            ["Monthly Required", fmt(esc.monthly_required || 0)],
+            ["Cushion Required", fmt(esc.cushion_required || 0)],
+            ["Balance", fmt(esc.balance || 0)],
+            ["Shortage", fmt(esc.shortage || 0)],
+            ["Surplus", fmt(esc.surplus || 0)],
+          ],
+          styles: { fontSize: 10 },
+          theme: "grid",
         });
       }
 
@@ -536,6 +559,8 @@ export default function AdminLoanDetail() {
         )}
       </section>
 
+      <EscrowSettings loan={loan} onRefresh={loadData} />
+
       <EscrowPanel loanId={id!} onRefresh={loadData} />
 
       <section className="space-y-4">
@@ -626,6 +651,142 @@ function StatCard({
       <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
       <div className="text-2xl font-semibold mt-2">{displayValue}</div>
     </div>
+  );
+}
+
+function EscrowSettings({ loan, onRefresh }: { loan: any; onRefresh: () => void }) {
+  const { toast } = useToast();
+  const [projTax, setProjTax] = useState<number>(0);
+  const [projIns, setProjIns] = useState<number>(0);
+  const [cushionMonths, setCushionMonths] = useState<number>(2);
+  const [calc, setCalc] = useState<any | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("escrow_settings")
+        .select("*")
+        .eq("loan_id", loan.id)
+        .maybeSingle();
+      if (data) {
+        setProjTax(Number(data.proj_tax_annual || 0));
+        setProjIns(Number(data.proj_ins_annual || 0));
+        setCushionMonths(Number(data.cushion_months || 2));
+      }
+      const { data: ss } = await supabase.rpc("escrow_shortage_surplus", {
+        p_loan_id: loan.id,
+      });
+      setCalc(ss || null);
+    })();
+  }, [loan.id]);
+
+  async function saveAndRecalc() {
+    try {
+      setBusy(true);
+      await supabase.from("escrow_settings").upsert({
+        loan_id: loan.id,
+        proj_tax_annual: projTax,
+        proj_ins_annual: projIns,
+        cushion_months: cushionMonths,
+      });
+
+      await supabase.rpc("recalc_escrow_requirements", { p_loan_id: loan.id });
+      await supabase.rpc("generate_monthly_schedule", { p_loan_id: loan.id });
+
+      const { data: ss } = await supabase.rpc("escrow_shortage_surplus", {
+        p_loan_id: loan.id,
+      });
+      setCalc(ss || null);
+
+      toast({
+        title: "Escrow Settings Saved",
+        description:
+          "Requirements recalculated and schedule updated successfully",
+      });
+
+      onRefresh();
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        description: e.message || "Failed to save escrow settings",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const fmt = (n: number) =>
+    (n || 0).toLocaleString(undefined, { style: "currency", currency: "USD" });
+
+  return (
+    <section className="space-y-3 rounded-xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Escrow Settings</h2>
+        <Button disabled={busy} onClick={saveAndRecalc}>
+          {busy ? "Saving…" : "Save & Recalculate"}
+        </Button>
+      </div>
+
+      <div className="grid md:grid-cols-4 gap-3">
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">
+            Projected Taxes (annual)
+          </div>
+          <Input
+            type="number"
+            value={projTax || ""}
+            onChange={(e) => setProjTax(Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">
+            Projected Insurance (annual)
+          </div>
+          <Input
+            type="number"
+            value={projIns || ""}
+            onChange={(e) => setProjIns(Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">
+            Cushion (months)
+          </div>
+          <Input
+            type="number"
+            value={cushionMonths || ""}
+            onChange={(e) => setCushionMonths(Number(e.target.value))}
+          />
+        </div>
+
+        <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+          <div>
+            <div className="text-xs text-muted-foreground">Monthly Required</div>
+            <div className="font-semibold text-sm">
+              {fmt(calc?.monthly_required || loan.escrow_monthly_required || 0)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Cushion Required</div>
+            <div className="font-semibold text-sm">
+              {fmt(calc?.cushion_required || loan.escrow_cushion_required || 0)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Balance</div>
+            <div className="font-semibold text-sm">{fmt(calc?.balance || 0)}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Shortage / Surplus</div>
+            <div className="font-semibold text-sm">
+              {fmt(calc?.shortage || 0)} / {fmt(calc?.surplus || 0)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
