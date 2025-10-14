@@ -20,6 +20,7 @@ export default function AdminLoanDetail() {
   const [amount, setAmount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [genBusy, setGenBusy] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [dlq, setDlq] = useState<any | null>(null);
 
   useEffect(() => {
@@ -156,6 +157,31 @@ export default function AdminLoanDetail() {
     const end = new Date(today.getFullYear(), today.getMonth(), 0);
     const iso = (d: Date) => d.toISOString().slice(0, 10);
     return { start, end, startISO: iso(start), endISO: iso(end) };
+  }
+
+  async function regenerateSchedule() {
+    if (!loan) return;
+    try {
+      setRegenerating(true);
+      const { error } = await supabase.rpc("generate_monthly_schedule", {
+        p_loan_id: loan.id,
+      });
+      if (error) throw error;
+      toast({
+        title: "Schedule regenerated",
+        description: "The payment schedule has been updated.",
+      });
+      loadData();
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: e.message || "Failed to regenerate schedule",
+        variant: "destructive",
+      });
+    } finally {
+      setRegenerating(false);
+    }
   }
 
   async function generateMonthlyStatement() {
@@ -406,7 +432,17 @@ export default function AdminLoanDetail() {
       {/* Delinquency Status */}
       {dlq && (
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold">Delinquency Status</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Delinquency Status</h2>
+            <Button
+              onClick={regenerateSchedule}
+              disabled={regenerating}
+              variant="outline"
+              size="sm"
+            >
+              {regenerating ? "Regenerating..." : "Regenerate Schedule"}
+            </Button>
+          </div>
           <div className="grid md:grid-cols-4 gap-3">
             <StatCard 
               label="Next Due Date" 
