@@ -11,12 +11,13 @@ import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
 import { useNotify } from '@/lib/notify';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
+import { Role } from '@/types/domain';
 // @ts-ignore
 import jsPDF from 'jspdf';
 // @ts-ignore
 import 'jspdf-autotable';
 
-type Profile = { role: 'borrower_admin'|'borrower_user'|'lender_admin'|'lender_analyst'; customer_id: string | null };
+type Profile = { role: Role; customer_id: string | null };
 type Customer = { id: string; legal_name: string };
 type Facility = { id: string; type: 'revolving' | 'single_loan'; credit_limit: number; apr: number; min_advance: number };
 type Tx = {
@@ -144,10 +145,11 @@ export default function BorrowerPage() {
         .single();
 
       if (pErr || !p) { setErr(pErr?.message || 'Profile not found'); setLoading(false); return; }
-      setProfile({ ...p, role: roleRow?.role });
+      const userRole = roleRow?.role as Role;
+      setProfile({ ...p, role: userRole });
 
       // Lenders shouldn't be here
-      if (roleRow?.role === 'admin' || roleRow?.role === 'analyst') {
+      if (userRole === 'lender_admin' || userRole === 'lender_analyst') {
         return navigate('/admin', { replace: true });
       }
 

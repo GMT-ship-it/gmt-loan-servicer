@@ -18,6 +18,7 @@ import Borrower from "./pages/Borrower";
 import BorrowerLoanDetail from "./pages/portal/LoanDetail";
 import PortfolioDashboard from "./pages/admin/PortfolioDashboard";
 import Reports from "./pages/admin/Reports";
+import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/setup" element={<Setup />} />
           <Route path="/portal" element={<Portal />} />
           <Route element={<AppShell />}>
             <Route path="/admin" element={

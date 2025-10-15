@@ -92,6 +92,13 @@ export default function Portal() {
           <CardContent>
             <Button 
               variant="outline" 
+              onClick={() => navigate('/setup')}
+              className="w-full mb-2"
+            >
+              Assign Role
+            </Button>
+            <Button 
+              variant="ghost" 
               onClick={() => navigate('/login')}
               className="w-full"
             >

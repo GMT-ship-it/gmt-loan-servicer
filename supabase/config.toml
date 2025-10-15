@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.daily-lender-summary]
 verify_jwt = false
+
+[functions.assign-user-role]
+verify_jwt = false
