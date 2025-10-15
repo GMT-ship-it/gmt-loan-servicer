@@ -491,7 +491,7 @@ export default function AdminPage() {
       if (pErr) {
         setErr(pErr.message); setLoading(false); return;
       }
-      if (!roleRow || !['lender_admin', 'lender_analyst'].includes(roleRow.role)) {
+      if (!roleRow || !['admin', 'analyst'].includes(roleRow.role)) {
         return navigate('/borrower', { replace: true });
       }
 

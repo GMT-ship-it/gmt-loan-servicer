@@ -9,7 +9,7 @@ import CommandPalette from '@/components/CommandPalette';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 
-type AppRole = "lender_admin" | "lender_analyst" | "borrower_admin" | "borrower_user";
+type AppRole = "admin" | "analyst" | "borrower";
 
 function BellMenu() {
   const { items, unreadCount, loading, markAllRead, refresh } = useNotifications();
@@ -91,8 +91,8 @@ export default function AppShell() {
     })();
   }, []);
 
-  const isLender = role === "lender_admin" || role === "lender_analyst";
-  const isBorrower = role === "borrower_admin" || role === "borrower_user";
+  const isLender = role === "admin" || role === "analyst";
+  const isBorrower = role === "borrower";
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

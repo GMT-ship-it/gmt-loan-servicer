@@ -91,7 +91,7 @@ export default function AnalyticsPage() {
         .limit(1)
         .maybeSingle();
 
-      if (error || !roleRow || !['lender_admin', 'lender_analyst'].includes(roleRow.role)) {
+      if (error || !roleRow || !['admin', 'analyst'].includes(roleRow.role)) {
         navigate('/borrower', { replace: true });
         return;
       }
