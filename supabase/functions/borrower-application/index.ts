@@ -101,6 +101,20 @@ serve(async (req) => {
       });
     }
 
+    // Send confirmation emails
+    try {
+      await supabase.functions.invoke('send-application-emails', {
+        body: {
+          applicantEmail: v.email,
+          applicantName: v.fullName,
+          companyName: v.companyName,
+        }
+      });
+    } catch (emailError) {
+      console.error('Failed to send emails:', emailError);
+      // Don't fail the request if email fails
+    }
+
     return new Response(JSON.stringify({ ok: true }), {
       status: 200, headers: { "content-type": "application/json", ...cors },
     });
