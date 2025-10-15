@@ -15,7 +15,7 @@ export default function ThemeToggle() {
   }, [dark]);
 
   return (
-    <label className="text-xs text-muted flex items-center gap-2 cursor-pointer">
+    <label className="text-xs text-foreground/80 hover:text-foreground transition-colors flex items-center gap-2 cursor-pointer">
       <input
         type="checkbox"
         aria-label="Toggle dark theme"

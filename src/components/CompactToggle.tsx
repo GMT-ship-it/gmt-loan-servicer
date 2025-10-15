@@ -15,7 +15,7 @@ export default function CompactToggle() {
   }, [on]);
 
   return (
-    <label className="text-xs text-neutral-300 flex items-center gap-2 cursor-pointer">
+    <label className="text-xs text-foreground/80 hover:text-foreground transition-colors flex items-center gap-2 cursor-pointer">
       <input 
         type="checkbox"
         aria-label="Toggle compact mode"

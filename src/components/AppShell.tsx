@@ -20,7 +20,7 @@ function BellMenu() {
       <Button
         aria-label="Open notifications"
         variant="ghost"
-        className="relative text-muted hover:text-white"
+        className="relative text-foreground/80 hover:text-foreground"
         onClick={() => setOpen(o => !o)}
         title="Notifications"
       >
@@ -163,7 +163,7 @@ export default function AppShell() {
               variant="ghost"
               size="sm"
               onClick={handleSignOut}
-              className="text-muted hover:text-white"
+              className="text-foreground/80 hover:text-foreground"
               title="Sign out"
             >
               <LogOut className="h-4 w-4" />
