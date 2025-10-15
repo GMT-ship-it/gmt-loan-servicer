@@ -70,14 +70,14 @@ export default function Apply() {
       const { data, error } = await supabase.functions.invoke('borrower-application', {
         body: {
           companyName: form.companyName,
-          contactName: form.contactName,
+          fullName: form.contactName, // Map contactName to fullName
           email: form.email,
           phone: form.phone,
           title: form.title,
-          requestedAmount: Number(form.requestedAmount),
-          sector: form.sector,
+          requestedAmount: form.requestedAmount, // Send as string, function will coerce
+          industry: form.sector, // Map sector to industry
           purpose: form.purpose,
-          address: form.address,
+          businessAddress: form.address, // Map address to businessAddress
         }
       });
 
