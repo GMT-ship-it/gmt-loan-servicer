@@ -31,8 +31,8 @@ serve(async (req) => {
       );
     }
 
-    // Validate role
-    const validRoles = ['lender_admin', 'lender_analyst', 'borrower_admin', 'borrower_user'];
+    // Validate role - must match app_role enum
+    const validRoles = ['admin', 'analyst', 'borrower'];
     if (!validRoles.includes(role)) {
       return new Response(
         JSON.stringify({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }),

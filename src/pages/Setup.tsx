@@ -10,7 +10,7 @@ import { Loader2 } from 'lucide-react';
 
 export default function Setup() {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<string>('lender_admin');
+  const [role, setRole] = useState<string>('admin');
   const [orgName, setOrgName] = useState('Default Organization');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -44,7 +44,7 @@ export default function Setup() {
 
       // Clear form
       setEmail('');
-      setRole('lender_admin');
+      setRole('admin');
       setOrgName('Default Organization');
     } catch (error: any) {
       console.error('Error assigning role:', error);
@@ -86,10 +86,9 @@ export default function Setup() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="lender_admin">Lender Admin</SelectItem>
-                <SelectItem value="lender_analyst">Lender Analyst</SelectItem>
-                <SelectItem value="borrower_admin">Borrower Admin</SelectItem>
-                <SelectItem value="borrower_user">Borrower User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="analyst">Analyst</SelectItem>
+                <SelectItem value="borrower">Borrower</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -117,10 +116,9 @@ export default function Setup() {
           <div className="text-sm text-muted-foreground space-y-1">
             <p><strong>Available Roles:</strong></p>
             <ul className="list-disc list-inside ml-2 space-y-1">
-              <li><strong>Lender Admin:</strong> Full access to admin portal</li>
-              <li><strong>Lender Analyst:</strong> Read-only admin access</li>
-              <li><strong>Borrower Admin:</strong> Full borrower portal access</li>
-              <li><strong>Borrower User:</strong> Limited borrower access</li>
+              <li><strong>Admin:</strong> Full access to admin portal</li>
+              <li><strong>Analyst:</strong> Read-only admin access</li>
+              <li><strong>Borrower:</strong> Borrower portal access</li>
             </ul>
           </div>
         </CardContent>
