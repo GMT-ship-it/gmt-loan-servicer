@@ -112,34 +112,34 @@ export default function AppShell() {
             <Link to="/" className="text-2xl font-extrabold tracking-tight">
               SummitLine
             </Link>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-muted overflow-x-auto" aria-label="Primary">
+            <nav className="hidden md:flex items-center gap-6 text-sm overflow-x-auto" aria-label="Primary">
               {isLender && (
                 <>
                   <Link
                     to="/admin"
                     aria-current={pathname.startsWith('/admin') ? 'page' : undefined}
-                    className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/admin') ? 'font-semibold' : ''}`}
+                    className={`hover:text-primary whitespace-nowrap transition-colors ${pathname.startsWith('/admin') ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
                   >
                     Admin
                   </Link>
                   <Link
                     to="/admin/dashboard"
                     aria-current={pathname === '/admin/dashboard' ? 'page' : undefined}
-                    className={`hover:opacity-80 whitespace-nowrap ${pathname === '/admin/dashboard' ? 'font-semibold' : ''}`}
+                    className={`hover:text-primary whitespace-nowrap transition-colors ${pathname === '/admin/dashboard' ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
                   >
                     Dashboard
                   </Link>
                   <Link
                     to="/admin/loans"
                     aria-current={pathname.startsWith('/admin/loans') ? 'page' : undefined}
-                    className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/admin/loans') ? 'font-semibold' : ''}`}
+                    className={`hover:text-primary whitespace-nowrap transition-colors ${pathname.startsWith('/admin/loans') ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
                   >
                     Loans
                   </Link>
                   <Link
                     to="/admin/reports"
                     aria-current={pathname === '/admin/reports' ? 'page' : undefined}
-                    className={`hover:opacity-80 whitespace-nowrap ${pathname === '/admin/reports' ? 'font-semibold' : ''}`}
+                    className={`hover:text-primary whitespace-nowrap transition-colors ${pathname === '/admin/reports' ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
                   >
                     Reports
                   </Link>
@@ -149,7 +149,7 @@ export default function AppShell() {
                 <Link
                   to="/borrower"
                   aria-current={pathname.startsWith('/borrower') ? 'page' : undefined}
-                  className={`hover:opacity-80 whitespace-nowrap ${pathname.startsWith('/borrower') ? 'font-semibold' : ''}`}
+                  className={`hover:text-primary whitespace-nowrap transition-colors ${pathname.startsWith('/borrower') ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
                 >
                   My Loans
                 </Link>
