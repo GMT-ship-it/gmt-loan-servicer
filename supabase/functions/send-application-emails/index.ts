@@ -51,10 +51,9 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Applicant email sent:", applicantEmailResponse);
 
     // Send notification to admin
-    // Note: Replace with actual admin email
     const adminEmailResponse = await resend.emails.send({
       from: "Mountain Investments <onboarding@resend.dev>",
-      to: ["admin@example.com"], // TODO: Replace with actual admin email
+      to: ["admin@mountaininvestments.com"], // Update this to your actual admin email
       subject: `New Application: ${companyName}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
