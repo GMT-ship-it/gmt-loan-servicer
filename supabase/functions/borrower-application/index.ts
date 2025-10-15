@@ -56,9 +56,9 @@ serve(async (req) => {
       });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
-    });
+    // Use service role key for public application submissions (no auth required)
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // parse JSON safely
     let raw: any = {};
@@ -79,13 +79,6 @@ serve(async (req) => {
       );
     }
 
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized (no session)" }), {
-        status: 401, headers: { "content-type": "application/json", ...cors },
-      });
-    }
-
     const v = parsed.data;
     const payload = {
       company_name: v.companyName,
@@ -97,7 +90,7 @@ serve(async (req) => {
       phone: v.phone ?? null,
       requested_amount: v.requestedAmount, // numeric
       purpose: v.purpose,
-      created_by: user.id,
+      created_by: null, // No user auth required for public applications
     };
 
     const { error } = await supabase.from("borrower_applications").insert(payload);
