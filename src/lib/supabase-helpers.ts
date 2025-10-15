@@ -8,11 +8,12 @@ export async function requireUser() {
 
 export async function getUserRole(userId: string) {
   const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  
+    .from("user_roles")
+    .select("role, organization_id")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
   if (error) throw error;
-  return data;
+  return data; // { role, organization_id } | null
 }
+

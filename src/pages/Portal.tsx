@@ -27,19 +27,23 @@ export default function Portal() {
           return;
         }
 
-        // 2) Fetch the profile for this user and read the role
+        // 2) Fetch the user's role from user_roles
         const userId = session.user.id;
-        const { data: profile, error } = await (supabase as any)
-          .from('profiles')
+        const { data: roleRow, error } = await supabase
+          .from('user_roles')
           .select('role')
-          .eq('id', userId)
-          .single();
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle();
 
-        if (error || !profile) {
-          throw new Error(error?.message || 'Profile not found');
+        if (error) {
+          throw new Error(error.message);
         }
 
-        const role = profile.role as AppRole;
+        const role = roleRow?.role as AppRole | undefined;
+        if (!role) {
+          throw new Error('No role assigned to this user');
+        }
 
         // 3) Route by role
         if (mounted) {
@@ -63,7 +67,7 @@ export default function Portal() {
   if (status === 'checking' || status === 'routing') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md" role="status" aria-live="polite">
           <CardContent className="pt-6">
             <div className="flex items-center justify-center space-x-2">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -78,7 +82,7 @@ export default function Portal() {
   if (status === 'error') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md" role="alert" aria-live="assertive">
           <CardHeader>
             <CardTitle>Portal Error</CardTitle>
             <CardDescription className="text-destructive">

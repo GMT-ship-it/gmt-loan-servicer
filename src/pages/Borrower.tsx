@@ -129,18 +129,25 @@ export default function BorrowerPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return navigate('/login', { replace: true });
 
-      // Load profile
+      // Fetch role from user_roles and profile for customer_id
+      const { data: roleRow, error: rErr } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .maybeSingle();
+
       const { data: p, error: pErr } = await (supabase as any)
         .from('profiles')
-        .select('role, customer_id')
+        .select('customer_id')
         .eq('id', session.user.id)
         .single();
 
       if (pErr || !p) { setErr(pErr?.message || 'Profile not found'); setLoading(false); return; }
-      setProfile(p);
+      setProfile({ ...p, role: roleRow?.role });
 
       // Lenders shouldn't be here
-      if (p.role === 'lender_admin' || p.role === 'lender_analyst') {
+      if (roleRow?.role === 'lender_admin' || roleRow?.role === 'lender_analyst') {
         return navigate('/admin', { replace: true });
       }
 

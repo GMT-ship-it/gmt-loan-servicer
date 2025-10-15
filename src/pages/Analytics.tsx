@@ -84,21 +84,17 @@ export default function AnalyticsPage() {
         return;
       }
 
-      const { data: profile, error } = await supabase
-        .from('profiles')
+      const { data: roleRow, error } = await supabase
+        .from('user_roles')
         .select('role')
-        .eq('id', session.user.id)
-        .single();
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .maybeSingle();
 
-      if (error || !profile) {
-        // If no profile or error, user might not have role yet
+      if (error || !roleRow || !['lender_admin', 'lender_analyst'].includes(roleRow.role)) {
         navigate('/borrower', { replace: true });
         return;
       }
-
-      // Note: profiles table doesn't have role column, roles are in user_roles table
-      // For now, skip role check and allow access
-      // TODO: Implement proper role checking with user_roles table
 
       await loadAnalytics();
     };

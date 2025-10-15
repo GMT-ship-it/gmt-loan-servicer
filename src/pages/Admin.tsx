@@ -481,16 +481,17 @@ export default function AdminPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return navigate('/login', { replace: true });
 
-      const { data: profile, error: pErr } = await (supabase as any)
-        .from('profiles')
+      const { data: roleRow, error: pErr } = await supabase
+        .from('user_roles')
         .select('role')
-        .eq('id', session.user.id)
-        .single();
+        .eq('user_id', session.user.id)
+        .limit(1)
+        .maybeSingle();
 
-      if (pErr || !profile) {
-        setErr(pErr?.message || 'No profile'); setLoading(false); return;
+      if (pErr) {
+        setErr(pErr.message); setLoading(false); return;
       }
-      if (!['lender_admin', 'lender_analyst'].includes(profile.role)) {
+      if (!roleRow || !['lender_admin', 'lender_analyst'].includes(roleRow.role)) {
         return navigate('/borrower', { replace: true });
       }
 
