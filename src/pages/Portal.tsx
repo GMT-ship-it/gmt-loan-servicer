@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 
-type AppRole = 'lender_admin' | 'lender_analyst' | 'borrower_admin' | 'borrower_user';
+type AppRole = 'admin' | 'analyst' | 'borrower';
 
 export default function Portal() {
   const navigate = useNavigate();
@@ -48,10 +48,12 @@ export default function Portal() {
         // 3) Route by role
         if (mounted) {
           setStatus('routing');
-          if (role === 'lender_admin' || role === 'lender_analyst') {
+          if (role === 'admin' || role === 'analyst') {
             navigate('/admin', { replace: true });
-          } else {
+          } else if (role === 'borrower') {
             navigate('/borrower', { replace: true });
+          } else {
+            throw new Error(`Unknown role: ${role}`);
           }
         }
       } catch (e: any) {
