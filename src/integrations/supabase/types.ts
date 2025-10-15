@@ -2174,6 +2174,9 @@ export type Database = {
         | "construction"
         | "energy"
         | "other"
+        | "technology"
+        | "healthcare"
+        | "real_estate"
       txn_type:
         | "advance"
         | "payment"
@@ -2329,6 +2332,9 @@ export const Constants = {
         "construction",
         "energy",
         "other",
+        "technology",
+        "healthcare",
+        "real_estate",
       ],
       txn_type: [
         "advance",
