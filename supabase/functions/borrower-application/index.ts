@@ -10,7 +10,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const cors = {
   "access-control-allow-origin": ORIGIN,
   "access-control-allow-methods": "POST, OPTIONS",
-  "access-control-allow-headers": "authorization, content-type",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
 };
 
 const AppSchema = z.object({
