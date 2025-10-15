@@ -37,63 +37,63 @@ const App = () => (
           <Route element={<AppShell />}>
             <Route path="/admin" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <Admin />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/admin/covenants" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <AdminCovenants />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/admin/loans" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <AdminLoans />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/admin/loans/:id" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <AdminLoanDetail />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/admin/dashboard" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <PortfolioDashboard />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/admin/reports" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <Reports />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/analytics" element={
               <ErrorBoundary>
-                <Guard need={["lender_admin", "lender_analyst"]}>
+                <Guard need={["admin", "analyst"]}>
                   <Analytics />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/borrower" element={
               <ErrorBoundary>
-                <Guard need={["borrower_admin", "borrower_user"]}>
+                <Guard need={["borrower"]}>
                   <Borrower />
                 </Guard>
               </ErrorBoundary>
             } />
             <Route path="/portal/loans/:id" element={
               <ErrorBoundary>
-                <Guard need={["borrower_admin", "borrower_user"]}>
+                <Guard need={["borrower"]}>
                   <BorrowerLoanDetail />
                 </Guard>
               </ErrorBoundary>

@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
-type AppRole = "lender_admin" | "lender_analyst" | "borrower_admin" | "borrower_user";
+type AppRole = "admin" | "analyst" | "borrower";
 
 export function Guard({ 
   need, 

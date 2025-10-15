@@ -1,4 +1,4 @@
-export type Role = "lender_admin" | "lender_analyst" | "borrower_admin" | "borrower_user";
+export type Role = "admin" | "analyst" | "borrower";
 
 export type Borrower = {
   id: string;

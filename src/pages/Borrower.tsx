@@ -148,8 +148,8 @@ export default function BorrowerPage() {
       const userRole = roleRow?.role as Role;
       setProfile({ ...p, role: userRole });
 
-      // Lenders shouldn't be here
-      if (userRole === 'lender_admin' || userRole === 'lender_analyst') {
+      // Admins/analysts shouldn't be here
+      if (userRole === 'admin' || userRole === 'analyst') {
         return navigate('/admin', { replace: true });
       }
 
