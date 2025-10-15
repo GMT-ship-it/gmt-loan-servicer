@@ -434,28 +434,37 @@ export type Database = {
       customers: {
         Row: {
           address: string | null
+          application_status: string | null
           created_at: string
+          financing_purpose: string | null
           id: string
           legal_name: string
           region: string | null
+          requested_amount: number | null
           sector: Database["public"]["Enums"]["industry_sector"] | null
           tax_id: string | null
         }
         Insert: {
           address?: string | null
+          application_status?: string | null
           created_at?: string
+          financing_purpose?: string | null
           id?: string
           legal_name: string
           region?: string | null
+          requested_amount?: number | null
           sector?: Database["public"]["Enums"]["industry_sector"] | null
           tax_id?: string | null
         }
         Update: {
           address?: string | null
+          application_status?: string | null
           created_at?: string
+          financing_purpose?: string | null
           id?: string
           legal_name?: string
           region?: string | null
+          requested_amount?: number | null
           sector?: Database["public"]["Enums"]["industry_sector"] | null
           tax_id?: string | null
         }
@@ -1360,6 +1369,8 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean
+          phone: string | null
+          title: string | null
         }
         Insert: {
           created_at?: string
@@ -1367,6 +1378,8 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean
+          phone?: string | null
+          title?: string | null
         }
         Update: {
           created_at?: string
@@ -1374,6 +1387,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean
+          phone?: string | null
+          title?: string | null
         }
         Relationships: []
       }
@@ -1493,24 +1508,36 @@ export type Database = {
       }
       user_roles: {
         Row: {
+          applied_at: string | null
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           id: string
           organization_id: string
           role: Database["public"]["Enums"]["app_role"]
+          status: string | null
           user_id: string
         }
         Insert: {
+          applied_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           id?: string
           organization_id: string
           role: Database["public"]["Enums"]["app_role"]
+          status?: string | null
           user_id: string
         }
         Update: {
+          applied_at?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           id?: string
           organization_id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          status?: string | null
           user_id?: string
         }
         Relationships: [
