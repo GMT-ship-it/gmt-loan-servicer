@@ -61,11 +61,17 @@ const Index = () => {
               </p>
               
               <div className="flex flex-wrap gap-4">
-                <button className="btn-primary">
-                  Explore Solutions <ArrowRight className="w-5 h-5" />
+                <button 
+                  onClick={() => navigate('/apply')}
+                  className="btn-primary"
+                >
+                  Apply for Financing <ArrowRight className="w-5 h-5" />
                 </button>
-                <button className="btn-outline">
-                  Contact Us
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="btn-outline"
+                >
+                  Access Portal
                 </button>
               </div>
             </motion.div>
@@ -315,7 +321,7 @@ const Index = () => {
                   Access flexible capital to fuel your growth. Our streamlined process and experienced team make financing simple.
                 </p>
                 <button 
-                  onClick={() => navigate('/login')}
+                  onClick={() => navigate('/apply')}
                   className="btn-primary w-full"
                 >
                   Apply for Financing <ArrowRight className="w-5 h-5" />

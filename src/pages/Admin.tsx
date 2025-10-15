@@ -17,6 +17,7 @@ import { MetricCard } from '@/components/MetricCard';
 import { ListCard } from '@/components/ListCard';
 import { Chip } from '@/components/Chip';
 import CovenantChip from '@/components/admin/CovenantChip';
+import PendingApplications from '@/components/admin/PendingApplications';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 import type { Facility } from '@/types/facility';
 import Sparkline from '@/components/charts/Sparkline';
@@ -748,6 +749,11 @@ export default function AdminPage() {
           ))
         )}
       </Row>
+
+      {/* Pending Borrower Applications */}
+      <div className="mt-8">
+        <PendingApplications />
+      </div>
 
       {/* BBC Review */}
       <Row title="Borrowing Base Review">

@@ -7,6 +7,7 @@ import AppShell from "./components/AppShell";
 import { Guard } from "./components/Guard";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import Index from "./pages/Index";
+import Apply from "./pages/Apply";
 import Login from "./pages/Login";
 import Portal from "./pages/Portal";
 import Admin from "./pages/Admin";
@@ -31,6 +32,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/apply" element={<Apply />} />
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/portal" element={<Portal />} />
