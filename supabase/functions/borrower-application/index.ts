@@ -26,140 +26,58 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    // Create client with user's JWT to respect RLS
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-    const {
-      companyName,
-      contactName,
-      email,
-      phone,
-      title,
-      requestedAmount,
-      sector,
-      purpose,
-      address,
-    }: ApplicationRequest = await req.json();
-
-    console.log('Processing application for:', companyName);
+    const body = await req.json();
+    
+    console.log('Processing application for:', body.companyName);
 
     // Validate input
-    if (!companyName || !contactName || !email || !phone || !title || !requestedAmount || !sector || !purpose || !address) {
+    if (!body.companyName || !body.fullName || !body.email || !body.phone || !body.requestedAmount || !body.purpose) {
       throw new Error('Missing required fields');
     }
 
-    if (requestedAmount <= 0) {
+    if (body.requestedAmount <= 0) {
       throw new Error('Requested amount must be positive');
     }
 
-    // 1. Check if customer already exists
-    const { data: existingCustomer } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('legal_name', companyName)
-      .maybeSingle();
-
-    if (existingCustomer) {
-      throw new Error('An application already exists for this company');
+    // Get authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Authentication required');
     }
 
-    // 2. Create customer record
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
+    // Insert into borrower_applications table
+    const { error: insertError } = await supabase
+      .from('borrower_applications')
       .insert({
-        legal_name: companyName,
-        sector: sector,
-        address: address,
-        requested_amount: requestedAmount,
-        financing_purpose: purpose,
-        application_status: 'pending',
-      })
-      .select('id')
-      .single();
-
-    if (customerError) throw customerError;
-
-    console.log('Created customer:', customer.id);
-
-    // 3. Create auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: email,
-      email_confirm: false,
-      user_metadata: {
-        full_name: contactName,
-        phone: phone,
-        title: title,
-      }
-    });
-
-    if (authError) {
-      // Rollback customer creation
-      await supabase.from('customers').delete().eq('id', customer.id);
-      throw authError;
-    }
-
-    console.log('Created auth user:', authData.user.id);
-
-    // 4. Create profile
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .upsert(
-        {
-          id: authData.user.id,
-          full_name: contactName,
-          phone: phone,
-          title: title,
-          customer_id: customer.id,
-          is_active: true,
-        },
-        { onConflict: 'id' }
-      );
-
-    if (profileError) {
-      // Rollback
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      await supabase.from('customers').delete().eq('id', customer.id);
-      throw profileError;
-    }
-
-    console.log('Created profile');
-
-    // 5. Create pending user role
-    const { error: roleError } = await supabase
-      .from('user_roles')
-      .insert({
-        user_id: authData.user.id,
-        organization_id: '00000000-0000-0000-0000-000000000000', // Placeholder - will be set on approval
-        role: 'borrower',
-        status: 'pending_approval',
+        company_name: body.companyName,
+        industry: body.industry,
+        business_address: body.businessAddress,
+        full_name: body.fullName,
+        title: body.title,
+        email: body.email,
+        phone: body.phone,
+        requested_amount: Number(body.requestedAmount),
+        purpose: body.purpose,
+        created_by: user.id,
       });
 
-    if (roleError) {
-      // Rollback
-      await supabase.from('profiles').delete().eq('id', authData.user.id);
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      await supabase.from('customers').delete().eq('id', customer.id);
-      throw roleError;
+    if (insertError) {
+      console.error('Insert error:', insertError);
+      throw insertError;
     }
 
-    console.log('Created user role');
-
-    // 6. Send email notifications
-    try {
-      await supabase.functions.invoke('send-application-emails', {
-        body: {
-          applicantEmail: email,
-          applicantName: contactName,
-          companyName: companyName,
-        }
-      });
-    } catch (emailError) {
-      console.error('Failed to send emails:', emailError);
-      // Don't fail the application if email fails
-    }
+    console.log('Application submitted successfully for user:', user.id);
 
     return new Response(
-      JSON.stringify({ success: true, customerId: customer.id }),
+      JSON.stringify({ success: true }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

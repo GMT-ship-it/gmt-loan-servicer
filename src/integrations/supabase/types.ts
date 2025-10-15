@@ -227,6 +227,51 @@ export type Database = {
         }
         Relationships: []
       }
+      borrower_applications: {
+        Row: {
+          business_address: string | null
+          company_name: string
+          created_at: string | null
+          created_by: string | null
+          email: string
+          full_name: string
+          id: string
+          industry: string | null
+          phone: string | null
+          purpose: string | null
+          requested_amount: number
+          title: string | null
+        }
+        Insert: {
+          business_address?: string | null
+          company_name: string
+          created_at?: string | null
+          created_by?: string | null
+          email: string
+          full_name: string
+          id?: string
+          industry?: string | null
+          phone?: string | null
+          purpose?: string | null
+          requested_amount: number
+          title?: string | null
+        }
+        Update: {
+          business_address?: string | null
+          company_name?: string
+          created_at?: string | null
+          created_by?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          industry?: string | null
+          phone?: string | null
+          purpose?: string | null
+          requested_amount?: number
+          title?: string | null
+        }
+        Relationships: []
+      }
       borrowers: {
         Row: {
           address: string | null
