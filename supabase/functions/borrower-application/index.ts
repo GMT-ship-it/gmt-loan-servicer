@@ -103,14 +103,17 @@ serve(async (req) => {
     // 4. Create profile
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        full_name: contactName,
-        phone: phone,
-        title: title,
-        customer_id: customer.id,
-        is_active: true,
-      });
+      .upsert(
+        {
+          id: authData.user.id,
+          full_name: contactName,
+          phone: phone,
+          title: title,
+          customer_id: customer.id,
+          is_active: true,
+        },
+        { onConflict: 'id' }
+      );
 
     if (profileError) {
       // Rollback
