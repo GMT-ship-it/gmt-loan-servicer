@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CheckCircle2, XCircle, Loader2, Mail, Phone, Building2, DollarSign, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import DocumentRequestDialog from './DocumentRequestDialog';
+import AIAnalysisPanel from './AIAnalysisPanel';
 
 interface PendingApplication {
+  application_id: string;
   user_id: string;
   email: string;
   full_name: string;
@@ -61,6 +63,11 @@ export default function PendingApplications() {
         .eq('status', 'pending_approval')
         .order('applied_at', { ascending: true });
 
+      // Also fetch the actual application IDs
+      const { data: applications } = await supabase
+        .from('borrower_applications')
+        .select('id, email');
+
       if (error) throw error;
 
       // Get auth user emails
@@ -70,9 +77,11 @@ export default function PendingApplications() {
         const authUser = authUsers?.users?.find((u: any) => u.id === app.user_id);
         const profile = app.profiles;
         const customer = profile?.customers;
+        const application = applications?.find((a: any) => a.email === authUser?.email);
         
         return {
           user_id: app.user_id,
+          application_id: application?.id || '',
           email: authUser?.email || 'N/A',
           full_name: profile?.full_name || 'N/A',
           phone: profile?.phone,
@@ -330,6 +339,53 @@ export default function PendingApplications() {
                   className="mt-1"
                 />
               </div>
+
+              {/* AI Analysis Panel */}
+              {app.application_id && (
+                <AIAnalysisPanel
+                  applicationId={app.application_id}
+                  customerId={app.user_id}
+                  loanType={loanTypes[app.user_id] || 'working_capital'}
+                  requestedAmount={app.requested_amount || 0}
+                  onRequestDocuments={async (docs) => {
+                    // Get customer_id from profiles
+                    const { data: profile } = await supabase
+                      .from('profiles')
+                      .select('customer_id')
+                      .eq('id', app.user_id)
+                      .single();
+                    
+                    if (profile?.customer_id) {
+                      // Create document requests for all AI-suggested docs
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (!session) return;
+
+                      const requests = docs.map(doc => ({
+                        customer_id: profile.customer_id,
+                        custom_document_name: doc,
+                        requested_by: session.user.id,
+                      }));
+
+                      const { error } = await supabase
+                        .from('document_requests')
+                        .insert(requests);
+
+                      if (error) {
+                        toast({
+                          title: "Request Failed",
+                          description: error.message,
+                          variant: "destructive",
+                        });
+                      } else {
+                        toast({
+                          title: "Documents Requested",
+                          description: `${docs.length} document(s) requested based on AI analysis`,
+                        });
+                      }
+                    }
+                  }}
+                />
+              )}
 
               <div className="flex flex-col gap-3 pt-2">
                 <Button
