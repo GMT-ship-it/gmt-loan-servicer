@@ -12,6 +12,7 @@ import { Chip } from '@/components/Chip';
 import { useNotify } from '@/lib/notify';
 import { MetricSkeleton, SkeletonCard, SkeletonLine } from '@/components/Skeletons';
 import { Role } from '@/types/domain';
+import BorrowerDocuments from './BorrowerDocuments';
 // @ts-ignore
 import jsPDF from 'jspdf';
 // @ts-ignore
@@ -876,6 +877,12 @@ export default function BorrowerPage() {
           />
         )}
       </Row>
+
+      {/* Document Requests Section */}
+      <div className="mt-12 mb-8">
+        <h2 className="text-2xl font-bold mb-6">Requested Documents</h2>
+        <BorrowerDocuments />
+      </div>
 
       {/* Printable Statement Section */}
       <div className="print-compact mt-12">

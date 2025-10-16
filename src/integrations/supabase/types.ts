@@ -86,6 +86,47 @@ export type Database = {
           },
         ]
       }
+      application_documents: {
+        Row: {
+          document_request_id: string
+          file_path: string
+          id: string
+          mime_type: string | null
+          original_name: string | null
+          size_bytes: number | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          document_request_id: string
+          file_path: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          size_bytes?: number | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          document_request_id?: string
+          file_path?: string
+          id?: string
+          mime_type?: string | null
+          original_name?: string | null
+          size_bytes?: number | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_documents_document_request_id_fkey"
+            columns: ["document_request_id"]
+            isOneToOne: false
+            referencedRelation: "document_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assessed_fees: {
         Row: {
           amount: number
@@ -512,6 +553,102 @@ export type Database = {
           requested_amount?: number | null
           sector?: Database["public"]["Enums"]["industry_sector"] | null
           tax_id?: string | null
+        }
+        Relationships: []
+      }
+      document_requests: {
+        Row: {
+          created_at: string | null
+          custom_document_name: string | null
+          customer_id: string
+          document_template_id: string | null
+          due_date: string | null
+          id: string
+          requested_at: string | null
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          status: string | null
+          uploaded_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_document_name?: string | null
+          customer_id: string
+          document_template_id?: string | null
+          due_date?: string | null
+          id?: string
+          requested_at?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string | null
+          uploaded_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_document_name?: string | null
+          customer_id?: string
+          document_template_id?: string | null
+          due_date?: string | null
+          id?: string
+          requested_at?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string | null
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_requests_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_requests_document_template_id_fkey"
+            columns: ["document_template_id"]
+            isOneToOne: false
+            referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_mandatory: boolean | null
+          name: string
+          required_for_amount_max: number | null
+          required_for_amount_min: number | null
+          required_for_loan_types: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_mandatory?: boolean | null
+          name: string
+          required_for_amount_max?: number | null
+          required_for_amount_min?: number | null
+          required_for_loan_types?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_mandatory?: boolean | null
+          name?: string
+          required_for_amount_max?: number | null
+          required_for_amount_min?: number | null
+          required_for_loan_types?: string[] | null
         }
         Relationships: []
       }

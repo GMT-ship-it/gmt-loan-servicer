@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, XCircle, Loader2, Mail, Phone, Building2, DollarSign } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CheckCircle2, XCircle, Loader2, Mail, Phone, Building2, DollarSign, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import DocumentRequestDialog from './DocumentRequestDialog';
 
 interface PendingApplication {
   user_id: string;
@@ -28,6 +30,9 @@ export default function PendingApplications() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [loanTypes, setLoanTypes] = useState<Record<string, string>>({});
+  const [docDialogOpen, setDocDialogOpen] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<PendingApplication | null>(null);
 
   const loadApplications = async () => {
     try {
@@ -298,6 +303,23 @@ export default function PendingApplications() {
               )}
 
               <div>
+                <Label htmlFor={`loan-type-${app.user_id}`}>Loan Type</Label>
+                <Select
+                  value={loanTypes[app.user_id] || 'working_capital'}
+                  onValueChange={(value) => setLoanTypes({ ...loanTypes, [app.user_id]: value })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="working_capital">Working Capital</SelectItem>
+                    <SelectItem value="equipment_loan">Equipment Loan</SelectItem>
+                    <SelectItem value="equipment_lease">Equipment Finance Lease</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label htmlFor={`notes-${app.user_id}`}>Internal Notes (Optional)</Label>
                 <Textarea
                   id={`notes-${app.user_id}`}
@@ -309,38 +331,76 @@ export default function PendingApplications() {
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2">
                 <Button
-                  onClick={() => approveApplication(app.user_id)}
-                  disabled={processing === app.user_id}
-                  className="btn-primary flex-1"
-                >
-                  {processing === app.user_id ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Approve
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => rejectApplication(app.user_id)}
+                  onClick={async () => {
+                    // Get customer_id from profiles
+                    const { data: profile } = await supabase
+                      .from('profiles')
+                      .select('customer_id')
+                      .eq('id', app.user_id)
+                      .single();
+                    
+                    if (profile?.customer_id) {
+                      setSelectedApplication(app);
+                      setDocDialogOpen(true);
+                    }
+                  }}
                   disabled={processing === app.user_id}
                   variant="outline"
-                  className="flex-1 border-destructive/30 hover:bg-destructive/10"
+                  className="border-accent/30 hover:bg-accent/10"
                 >
-                  <XCircle className="w-4 h-4 mr-2" />
-                  Reject
+                  <FileText className="w-4 h-4 mr-2" />
+                  Request Documents
                 </Button>
+
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => approveApplication(app.user_id)}
+                    disabled={processing === app.user_id}
+                    className="btn-primary flex-1"
+                  >
+                    {processing === app.user_id ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-2" />
+                        Approve
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={() => rejectApplication(app.user_id)}
+                    disabled={processing === app.user_id}
+                    variant="outline"
+                    className="flex-1 border-destructive/30 hover:bg-destructive/10"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Reject
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       </CardContent>
+
+      {selectedApplication && (
+        <DocumentRequestDialog
+          open={docDialogOpen}
+          onClose={() => {
+            setDocDialogOpen(false);
+            setSelectedApplication(null);
+          }}
+          customerId={selectedApplication.user_id}
+          companyName={selectedApplication.company_name}
+          requestedAmount={selectedApplication.requested_amount || 0}
+          loanType={loanTypes[selectedApplication.user_id] || 'working_capital'}
+        />
+      )}
     </Card>
   );
 }
