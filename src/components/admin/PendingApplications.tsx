@@ -26,9 +26,23 @@ interface PendingApplication {
   applied_at: string;
 }
 
+interface RawApplication {
+  id: string;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  company_name: string;
+  business_address: string | null;
+  industry: string | null;
+  purpose: string | null;
+  requested_amount: number;
+  created_at: string;
+}
+
 export default function PendingApplications() {
   const { toast } = useToast();
   const [applications, setApplications] = useState<PendingApplication[]>([]);
+  const [rawApplications, setRawApplications] = useState<RawApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -48,6 +62,15 @@ export default function PendingApplications() {
         .order('applied_at', { ascending: true });
 
       if (rolesError) throw rolesError;
+
+      // Fetch raw borrower applications
+      const { data: rawApps, error: rawError } = await supabase
+        .from('borrower_applications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (rawError) throw rawError;
+      setRawApplications(rawApps || []);
 
       if (!userRoles || userRoles.length === 0) {
         setApplications([]);
@@ -240,24 +263,96 @@ export default function PendingApplications() {
     );
   }
 
-  if (applications.length === 0) {
+  if (applications.length === 0 && rawApplications.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Pending Applications</CardTitle>
+          <CardTitle>Applications</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-8">No pending applications</p>
+          <p className="text-muted-foreground text-center py-8">No applications to review</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Pending Applications ({applications.length})</CardTitle>
-      </CardHeader>
+    <div className="space-y-6">
+      {/* Raw Borrower Applications */}
+      {rawApplications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New Applications ({rawApplications.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {rawApplications.map((app) => (
+                <div key={app.id} className="border border-accent/20 rounded-lg p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">{app.company_name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Submitted: {new Date(app.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {app.industry && (
+                      <Badge variant="outline">{app.industry}</Badge>
+                    )}
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <span>{app.full_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
+                        <span>{app.email}</span>
+                      </div>
+                      {app.phone && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone className="w-4 h-4 text-muted-foreground" />
+                          <span>{app.phone}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <DollarSign className="w-4 h-4 text-muted-foreground" />
+                        <span>{app.requested_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+                      </div>
+                      {app.business_address && (
+                        <div className="flex items-start gap-2 text-sm">
+                          <Building2 className="w-4 h-4 text-muted-foreground mt-0.5" />
+                          <span className="text-muted-foreground">{app.business_address}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {app.purpose && (
+                    <div>
+                      <Label className="text-sm font-medium">Purpose</Label>
+                      <p className="text-sm text-muted-foreground mt-1">{app.purpose}</p>
+                    </div>
+                  )}
+
+                  <Badge variant="secondary">Awaiting Initial Review</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending User Role Applications */}
+      {applications.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pending Approvals ({applications.length})</CardTitle>
+          </CardHeader>
       <CardContent>
         <div className="space-y-6">
           {applications.map((app) => (
@@ -462,5 +557,7 @@ export default function PendingApplications() {
         />
       )}
     </Card>
+  )}
+  </div>
   );
 }
