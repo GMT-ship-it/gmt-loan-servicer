@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function CompactToggle() {
   const [on, setOn] = useState<boolean>(() => localStorage.getItem('compact') === '1');
@@ -16,12 +17,10 @@ export default function CompactToggle() {
 
   return (
     <label className="text-xs text-foreground/80 hover:text-foreground transition-colors flex items-center gap-2 cursor-pointer">
-      <input 
-        type="checkbox"
+      <Checkbox 
         aria-label="Toggle compact mode"
         checked={on} 
-        onChange={e => setOn(e.target.checked)}
-        className="w-3 h-3" 
+        onCheckedChange={(checked) => setOn(checked === true)}
       />
       Compact mode
     </label>

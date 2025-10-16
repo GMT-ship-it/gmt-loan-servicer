@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function ThemeToggle() {
   const [dark, setDark] = useState<boolean>(() => localStorage.getItem('theme') === 'dark');
@@ -16,11 +17,10 @@ export default function ThemeToggle() {
 
   return (
     <label className="text-xs text-foreground/80 hover:text-foreground transition-colors flex items-center gap-2 cursor-pointer">
-      <input
-        type="checkbox"
+      <Checkbox
         aria-label="Toggle dark theme"
         checked={dark}
-        onChange={e=>setDark(e.target.checked)}
+        onCheckedChange={(checked) => setDark(checked === true)}
       />
       {dark ? 'Dark' : 'Light'}
     </label>
