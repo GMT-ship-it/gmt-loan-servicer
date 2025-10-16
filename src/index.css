@@ -6,6 +6,48 @@
 
 @layer base {
   :root {
+    /* Dark Theme (Default) */
+    --background: 180 100% 3%;
+    --foreground: 180 5% 95%;
+
+    --card: 180 30% 8%;
+    --card-foreground: 180 5% 95%;
+
+    --popover: 180 30% 8%;
+    --popover-foreground: 180 5% 95%;
+
+    --primary: 177 100% 33%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 30% 12%;
+    --secondary-foreground: 180 5% 95%;
+
+    --muted: 180 20% 15%;
+    --muted-foreground: 180 5% 65%;
+
+    --accent: 177 100% 33%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 180 30% 18%;
+    --input: 180 30% 18%;
+    --ring: 177 100% 33%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 180 30% 6%;
+    --sidebar-foreground: 180 5% 95%;
+    --sidebar-primary: 177 100% 33%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 30% 12%;
+    --sidebar-accent-foreground: 180 5% 95%;
+    --sidebar-border: 180 30% 18%;
+    --sidebar-ring: 177 100% 33%;
+  }
+
+  .theme-light {
     /* Light Theme */
     --background: 0 0% 100%;
     --foreground: 180 5% 10%;
@@ -35,8 +77,6 @@
     --input: 180 30% 90%;
     --ring: 177 100% 33%;
 
-    --radius: 0.5rem;
-
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 180 5% 10%;
     --sidebar-primary: 177 100% 33%;
@@ -47,58 +87,19 @@
     --sidebar-ring: 177 100% 33%;
   }
 
-  .theme-dark {
-    /* Dark-Teal Theme */
-    --background: 180 100% 3%;
-    --foreground: 180 5% 95%;
-
-    --card: 180 30% 8%;
-    --card-foreground: 180 5% 95%;
-
-    --popover: 180 30% 8%;
-    --popover-foreground: 180 5% 95%;
-
-    --primary: 177 100% 33%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 180 30% 12%;
-    --secondary-foreground: 180 5% 95%;
-
-    --muted: 180 20% 15%;
-    --muted-foreground: 180 5% 65%;
-
-    --accent: 177 100% 33%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 180 30% 18%;
-    --input: 180 30% 18%;
-    --ring: 177 100% 33%;
-
-    --sidebar-background: 180 30% 6%;
-    --sidebar-foreground: 180 5% 95%;
-    --sidebar-primary: 177 100% 33%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 180 30% 12%;
-    --sidebar-accent-foreground: 180 5% 95%;
-    --sidebar-border: 180 30% 18%;
-    --sidebar-ring: 177 100% 33%;
-  }
-
   * {
     @apply border-border;
   }
 
   body {
     @apply bg-background text-foreground font-sans;
+    background: radial-gradient(circle at top left, #041F1E, #02191A);
+    background-attachment: fixed;
     letter-spacing: 0.01em;
   }
 
-  .theme-dark body {
-    background: radial-gradient(circle at top left, #041F1E, #02191A);
-    background-attachment: fixed;
+  .theme-light body {
+    background: #ffffff;
   }
 }
 
