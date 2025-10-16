@@ -138,6 +138,10 @@
     @apply transition-all duration-300;
   }
 
+  /* Compact mode utilities */
+  .compact .compact-p { @apply p-2 sm:p-3; }
+  .compact .compact-gap { @apply gap-2 sm:gap-3; }
+
   /* Navigation */
   .nav-link {
     @apply text-foreground/80 hover:text-accent;
