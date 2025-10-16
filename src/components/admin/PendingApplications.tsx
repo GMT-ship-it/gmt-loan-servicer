@@ -39,48 +39,52 @@ export default function PendingApplications() {
   const loadApplications = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // Fetch pending user roles
+      const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
-        .select(`
-          user_id,
-          applied_at,
-          profiles!inner(
-            id,
-            full_name,
-            phone,
-            title,
-            customer_id,
-            customers!inner(
-              id,
-              legal_name,
-              sector,
-              requested_amount,
-              financing_purpose,
-              address
-            )
-          )
-        `)
+        .select('user_id, applied_at')
         .eq('status', 'pending_approval')
         .order('applied_at', { ascending: true });
 
-      // Also fetch the actual application IDs
+      if (rolesError) throw rolesError;
+
+      if (!userRoles || userRoles.length === 0) {
+        setApplications([]);
+        return;
+      }
+
+      // Fetch profiles for these users
+      const userIds = userRoles.map(r => r.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, title, customer_id')
+        .in('id', userIds);
+
+      // Fetch customers for these profiles
+      const customerIds = profiles?.map(p => p.customer_id).filter(Boolean) || [];
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, legal_name, sector, requested_amount, financing_purpose, address')
+        .in('id', customerIds);
+
+      // Fetch borrower applications
       const { data: applications } = await supabase
         .from('borrower_applications')
         .select('id, email');
 
-      if (error) throw error;
-
       // Get auth user emails
       const { data: authUsers } = await supabase.auth.admin.listUsers();
 
-      const enriched: PendingApplication[] = (data || []).map((app: any) => {
-        const authUser = authUsers?.users?.find((u: any) => u.id === app.user_id);
-        const profile = app.profiles;
-        const customer = profile?.customers;
+      // Join all the data
+      const enriched: PendingApplication[] = userRoles.map((role) => {
+        const profile = profiles?.find(p => p.id === role.user_id);
+        const customer = customers?.find(c => c.id === profile?.customer_id);
+        const authUser = authUsers?.users?.find((u: any) => u.id === role.user_id);
         const application = applications?.find((a: any) => a.email === authUser?.email);
         
         return {
-          user_id: app.user_id,
+          user_id: role.user_id,
           application_id: application?.id || '',
           email: authUser?.email || 'N/A',
           full_name: profile?.full_name || 'N/A',
@@ -91,7 +95,7 @@ export default function PendingApplications() {
           requested_amount: customer?.requested_amount,
           financing_purpose: customer?.financing_purpose,
           address: customer?.address,
-          applied_at: app.applied_at,
+          applied_at: role.applied_at,
         };
       });
 
