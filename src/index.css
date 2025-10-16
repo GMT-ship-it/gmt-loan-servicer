@@ -6,6 +6,48 @@
 
 @layer base {
   :root {
+    /* Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 180 5% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 180 5% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 180 5% 10%;
+
+    --primary: 177 100% 33%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 30% 96%;
+    --secondary-foreground: 180 5% 10%;
+
+    --muted: 180 30% 96%;
+    --muted-foreground: 180 5% 40%;
+
+    --accent: 177 100% 33%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 180 30% 90%;
+    --input: 180 30% 90%;
+    --ring: 177 100% 33%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 180 5% 10%;
+    --sidebar-primary: 177 100% 33%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 30% 96%;
+    --sidebar-accent-foreground: 180 5% 10%;
+    --sidebar-border: 180 30% 90%;
+    --sidebar-ring: 177 100% 33%;
+  }
+
+  .theme-dark {
     /* Dark-Teal Theme */
     --background: 180 100% 3%;
     --foreground: 180 5% 95%;
@@ -35,8 +77,6 @@
     --input: 180 30% 18%;
     --ring: 177 100% 33%;
 
-    --radius: 0.5rem;
-
     --sidebar-background: 180 30% 6%;
     --sidebar-foreground: 180 5% 95%;
     --sidebar-primary: 177 100% 33%;
@@ -53,9 +93,12 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+    letter-spacing: 0.01em;
+  }
+
+  .theme-dark body {
     background: radial-gradient(circle at top left, #041F1E, #02191A);
     background-attachment: fixed;
-    letter-spacing: 0.01em;
   }
 }
 
