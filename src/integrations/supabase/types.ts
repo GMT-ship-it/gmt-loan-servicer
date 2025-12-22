@@ -2037,18 +2037,12 @@ export type Database = {
         Args: { p_asof: string; p_days: number; p_loan_id: string }
         Returns: undefined
       }
-      accrued_interest: {
-        Args: { p_loan_id: string }
-        Returns: number
-      }
+      accrued_interest: { Args: { p_loan_id: string }; Returns: number }
       apply_payment_waterfall: {
         Args: { p_payment_id: string }
         Returns: undefined
       }
-      assess_late_fees_asof: {
-        Args: { p_asof: string }
-        Returns: undefined
-      }
+      assess_late_fees_asof: { Args: { p_asof: string }; Returns: undefined }
       borrower_activity_between: {
         Args: { p_end: string; p_start: string }
         Returns: {
@@ -2063,6 +2057,12 @@ export type Database = {
           loan_number: string | null
           principal_paid: number | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "v_borrower_activity"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       borrower_due_summary: {
         Args: { p_asof: string; p_loan_id: string }
@@ -2073,7 +2073,7 @@ export type Database = {
         Returns: undefined
       }
       check_rls_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           policy_count: number
           rls_enabled: boolean
@@ -2091,14 +2091,8 @@ export type Database = {
         }
         Returns: undefined
       }
-      escrow_shortage_surplus: {
-        Args: { p_loan_id: string }
-        Returns: Json
-      }
-      evaluate_covenants: {
-        Args: { p_facility: string }
-        Returns: undefined
-      }
+      escrow_shortage_surplus: { Args: { p_loan_id: string }; Returns: Json }
+      evaluate_covenants: { Args: { p_facility: string }; Returns: undefined }
       facility_accrued_interest: {
         Args: { p_as_of?: string; p_facility: string }
         Returns: number
@@ -2107,10 +2101,7 @@ export type Database = {
         Args: { p_facility: string }
         Returns: number
       }
-      facility_bbc_age_days: {
-        Args: { p_facility: string }
-        Returns: number
-      }
+      facility_bbc_age_days: { Args: { p_facility: string }; Returns: number }
       facility_has_recent_approved_bbc: {
         Args: { p_days?: number; p_facility: string }
         Returns: boolean
@@ -2139,7 +2130,7 @@ export type Database = {
         }[]
       }
       get_portfolio_aggregates: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           credit_limit: number
           facilities: number
@@ -2160,6 +2151,12 @@ export type Database = {
           loan_number: string | null
           memo: string | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "v_gl_entries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       has_role: {
         Args: {
@@ -2172,24 +2169,15 @@ export type Database = {
         Args: { p_asof: string; p_installment_no: number; p_loan_id: string }
         Returns: boolean
       }
-      is_admin_or_analyst: {
-        Args: { _user_id: string }
-        Returns: boolean
-      }
-      is_borrower: {
-        Args: { uid: string }
-        Returns: boolean
-      }
-      is_lender: {
-        Args: { uid: string }
-        Returns: boolean
-      }
+      is_admin_or_analyst: { Args: { _user_id: string }; Returns: boolean }
+      is_borrower: { Args: { uid: string }; Returns: boolean }
+      is_lender: { Args: { uid: string }; Returns: boolean }
       late_fee_amount_for_installment: {
         Args: { p_installment_no: number; p_loan_id: string }
         Returns: number
       }
       lender_exposure_snapshot: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           available_to_draw: number
           bbc_approved_within_45d: boolean
@@ -2224,13 +2212,19 @@ export type Database = {
           principal: number | null
           received_date: string | null
         }[]
+        SetofOptions: {
+          from: "*"
+          to: "v_payment_register"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       payoff_quote: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: number
       }
       portfolio_policy_breaches: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           code: string
           customer_name: string
@@ -2264,26 +2258,14 @@ export type Database = {
         Args: { p_as_of: string; p_facility: string }
         Returns: number
       }
-      principal_outstanding: {
-        Args: { p_loan_id: string }
-        Returns: number
-      }
+      principal_outstanding: { Args: { p_loan_id: string }; Returns: number }
       principal_outstanding_asof: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: number
       }
-      recalc_bbc_header: {
-        Args: { p_report: string }
-        Returns: undefined
-      }
-      recalc_escrow_requirements: {
-        Args: { p_loan_id: string }
-        Returns: Json
-      }
-      run_daily_interest_accrual: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      recalc_bbc_header: { Args: { p_report: string }; Returns: undefined }
+      recalc_escrow_requirements: { Args: { p_loan_id: string }; Returns: Json }
+      run_daily_interest_accrual: { Args: never; Returns: undefined }
       scheduled_vs_paid: {
         Args: { p_asof: string; p_loan_id: string }
         Returns: {
@@ -2310,18 +2292,9 @@ export type Database = {
           type: Database["public"]["Enums"]["txn_type"]
         }[]
       }
-      sync_assessed_fees_paid: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      user_customer_id: {
-        Args: { uid: string }
-        Returns: string
-      }
-      user_organization_id: {
-        Args: { _user_id: string }
-        Returns: string
-      }
+      sync_assessed_fees_paid: { Args: never; Returns: undefined }
+      user_customer_id: { Args: { uid: string }; Returns: string }
+      user_organization_id: { Args: { _user_id: string }; Returns: string }
       utilization_timeseries: {
         Args: { p_days?: number; p_facility: string }
         Returns: {
