@@ -22,6 +22,53 @@ serve(async (req) => {
       }
     });
 
+    // SECURITY: Verify the caller is authenticated
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing Authorization header');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !callerUser) {
+      console.error('Invalid token:', authError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // SECURITY: Verify the caller has admin role
+    const { data: callerRole, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', callerUser.id)
+      .eq('role', 'admin')
+      .maybeSingle();
+
+    if (roleError) {
+      console.error('Error checking caller role:', roleError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify permissions' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!callerRole) {
+      console.error('Caller is not an admin:', callerUser.id);
+      return new Response(
+        JSON.stringify({ error: 'Forbidden - admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Admin user verified:', callerUser.email);
+
     const { user_email, role, organization_name } = await req.json();
 
     if (!user_email || !role) {
@@ -86,6 +133,14 @@ serve(async (req) => {
       .select('*')
       .eq('user_id', user.id)
       .single();
+
+    // Log the role assignment for audit purposes
+    console.log('Role assignment:', {
+      assigned_by: callerUser.email,
+      target_user: user_email,
+      role,
+      organization: orgNameToUse
+    });
 
     if (existingRole) {
       // Update existing role
