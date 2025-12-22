@@ -2310,7 +2310,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "analyst" | "borrower"
+      app_role: "admin" | "analyst" | "borrower" | "owner"
       bbc_item_type: "accounts_receivable" | "inventory" | "cash" | "other"
       bbc_status:
         | "draft"
@@ -2467,7 +2467,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "analyst", "borrower"],
+      app_role: ["admin", "analyst", "borrower", "owner"],
       bbc_item_type: ["accounts_receivable", "inventory", "cash", "other"],
       bbc_status: [
         "draft",
