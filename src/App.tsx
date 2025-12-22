@@ -22,6 +22,15 @@ import Reports from "./pages/admin/Reports";
 import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
+// PMD (Portfolio Management Dashboard) pages
+import { OwnerGuard } from "./components/pmd/OwnerGuard";
+import { PmdLayout } from "./components/pmd/PmdLayout";
+import PmdDashboard from "./pages/pmd/PmdDashboard";
+import PmdCapital from "./pages/pmd/PmdCapital";
+import PmdProjects from "./pages/pmd/PmdProjects";
+import PmdLiquidation from "./pages/pmd/PmdLiquidation";
+import PmdAdmin from "./pages/pmd/PmdAdmin";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -101,6 +110,34 @@ const App = () => (
               </ErrorBoundary>
             } />
           </Route>
+          
+          {/* PMD Routes - Owner Only */}
+          <Route path="/pmd/dashboard" element={
+            <OwnerGuard>
+              <PmdLayout><PmdDashboard /></PmdLayout>
+            </OwnerGuard>
+          } />
+          <Route path="/pmd/capital" element={
+            <OwnerGuard>
+              <PmdLayout><PmdCapital /></PmdLayout>
+            </OwnerGuard>
+          } />
+          <Route path="/pmd/projects" element={
+            <OwnerGuard>
+              <PmdLayout><PmdProjects /></PmdLayout>
+            </OwnerGuard>
+          } />
+          <Route path="/pmd/liquidation" element={
+            <OwnerGuard>
+              <PmdLayout><PmdLiquidation /></PmdLayout>
+            </OwnerGuard>
+          } />
+          <Route path="/pmd/admin" element={
+            <OwnerGuard>
+              <PmdLayout><PmdAdmin /></PmdLayout>
+            </OwnerGuard>
+          } />
+          
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
