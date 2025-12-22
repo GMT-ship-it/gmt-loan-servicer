@@ -1544,6 +1544,140 @@ export type Database = {
           },
         ]
       }
+      pmd_assets: {
+        Row: {
+          commission_rate: number
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          sale_value_assumption: number
+        }
+        Insert: {
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          sale_value_assumption?: number
+        }
+        Update: {
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          sale_value_assumption?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pmd_assets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "pmd_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pmd_capital_events: {
+        Row: {
+          amount: number
+          created_at: string
+          event_date: string
+          event_type: string
+          id: string
+          interest_flag: boolean
+          interest_rate_override: number | null
+          memo: string | null
+          project_id: string
+          provider_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          event_date: string
+          event_type: string
+          id?: string
+          interest_flag?: boolean
+          interest_rate_override?: number | null
+          memo?: string | null
+          project_id: string
+          provider_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          event_date?: string
+          event_type?: string
+          id?: string
+          interest_flag?: boolean
+          interest_rate_override?: number | null
+          memo?: string | null
+          project_id?: string
+          provider_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pmd_capital_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "pmd_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pmd_capital_events_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "pmd_capital_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pmd_capital_providers: {
+        Row: {
+          created_at: string
+          default_interest_rate: number
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          default_interest_rate?: number
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          default_interest_rate?: number
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      pmd_projects: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          status?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -2172,6 +2306,7 @@ export type Database = {
       is_admin_or_analyst: { Args: { _user_id: string }; Returns: boolean }
       is_borrower: { Args: { uid: string }; Returns: boolean }
       is_lender: { Args: { uid: string }; Returns: boolean }
+      is_owner: { Args: { _user_id: string }; Returns: boolean }
       late_fee_amount_for_installment: {
         Args: { p_installment_no: number; p_loan_id: string }
         Returns: number
