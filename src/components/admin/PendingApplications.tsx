@@ -96,20 +96,31 @@ export default function PendingApplications() {
         .from('borrower_applications')
         .select('id, email');
 
-      // Get auth user emails
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      // Get user emails via secure Edge Function (not admin API from client)
+      let userEmails: Record<string, string> = {};
+      try {
+        const { data: emailData, error: emailError } = await supabase.functions.invoke(
+          'get-pending-user-emails',
+          { body: { userIds } }
+        );
+        if (!emailError && emailData?.users) {
+          userEmails = emailData.users;
+        }
+      } catch (e) {
+        console.error('Failed to fetch user emails:', e);
+      }
 
       // Join all the data
       const enriched: PendingApplication[] = userRoles.map((role) => {
         const profile = profiles?.find(p => p.id === role.user_id);
         const customer = customers?.find(c => c.id === profile?.customer_id);
-        const authUser = authUsers?.users?.find((u: any) => u.id === role.user_id);
-        const application = applications?.find((a: any) => a.email === authUser?.email);
+        const userEmail = userEmails[role.user_id] || null;
+        const application = applications?.find((a: any) => a.email === userEmail);
         
         return {
           user_id: role.user_id,
           application_id: application?.id || '',
-          email: authUser?.email || 'N/A',
+          email: userEmail || 'N/A',
           full_name: profile?.full_name || 'N/A',
           phone: profile?.phone,
           title: profile?.title,
