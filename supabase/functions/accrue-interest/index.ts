@@ -1,5 +1,6 @@
 // Deno Deploy (Supabase Edge Function)
 // Daily interest accrual for fin_instruments with catch-up/backfill support
+// Prevents duplicate accruals via fin_accrual_postings table
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -38,7 +39,7 @@ async function runAccrualForDate(
   runDate: string,
   instruments: any[],
   accountByName: Record<string, any>
-): Promise<{ processed: number; totalInterest: number; details: any[] }> {
+): Promise<{ processed: number; totalInterest: number; skipped: number; details: any[] }> {
   const notesReceivable = accountByName['Notes Receivable'];
   const notesPayable = accountByName['Notes Payable'];
   const interestReceivable = accountByName['Interest Receivable'];
@@ -47,8 +48,23 @@ async function runAccrualForDate(
   const interestExpense = accountByName['Interest Expense'];
 
   const results: any[] = [];
+  let skippedCount = 0;
 
   for (const inst of instruments) {
+    // Check if accrual already exists for this instrument/date (idempotency check)
+    const { data: existingAccrual } = await supabase
+      .from('fin_accrual_postings')
+      .select('id')
+      .eq('instrument_id', inst.id)
+      .eq('accrual_date', runDate)
+      .maybeSingle();
+
+    if (existingAccrual) {
+      console.log(`  Skipping ${inst.name} - accrual already exists for ${runDate}`);
+      skippedCount++;
+      continue;
+    }
+
     // Determine principal account based on position
     const principalAccountId = inst.position === 'receivable' 
       ? notesReceivable.id 
@@ -146,6 +162,26 @@ async function runAccrualForDate(
       continue;
     }
 
+    // Insert into fin_accrual_postings to prevent future duplicates
+    const { error: postingError } = await supabase
+      .from('fin_accrual_postings')
+      .insert({
+        instrument_id: inst.id,
+        accrual_date: runDate,
+        transaction_id: txn.id,
+        interest_amount: interestToday,
+      });
+
+    if (postingError) {
+      // Unique constraint violation means duplicate - this is expected if racing
+      if (postingError.code === '23505') {
+        console.log(`  Duplicate accrual detected for ${inst.name} on ${runDate}, skipping`);
+        skippedCount++;
+        continue;
+      }
+      console.error(`Error inserting accrual posting for ${inst.id}:`, postingError);
+    }
+
     // Get previous day's accrued interest balance
     const prevDateStr = addDays(runDate, -1);
     const { data: prevPosition } = await supabase
@@ -188,6 +224,7 @@ async function runAccrualForDate(
   return {
     processed: results.length,
     totalInterest: results.reduce((sum, r) => sum + r.interest_accrued, 0),
+    skipped: skippedCount,
     details: results,
   };
 }
@@ -301,7 +338,7 @@ serve(async (req) => {
       console.log(`Dates to process: ${datesToProcess.length} (from ${datesToProcess[0] || 'none'} to ${targetDate})`);
     }
 
-    // Filter out dates that already have completed runs
+    // Filter out dates that already have completed runs in fin_interest_accrual_runs
     const { data: existingRuns } = await supabase
       .from('fin_interest_accrual_runs')
       .select('run_date')
@@ -328,6 +365,7 @@ serve(async (req) => {
     // Process each date
     let totalDatesProcessed = 0;
     let grandTotalInterest = 0;
+    let totalSkipped = 0;
     const allDetails: any[] = [];
 
     for (const runDate of filteredDates) {
@@ -345,13 +383,15 @@ serve(async (req) => {
 
       totalDatesProcessed++;
       grandTotalInterest += result.totalInterest;
+      totalSkipped += result.skipped;
       allDetails.push({
         date: runDate,
         instruments_processed: result.processed,
+        instruments_skipped: result.skipped,
         interest_accrued: result.totalInterest,
       });
 
-      console.log(`  Completed: ${result.processed} instruments, $${result.totalInterest.toFixed(2)} interest`);
+      console.log(`  Completed: ${result.processed} instruments, ${result.skipped} skipped, $${result.totalInterest.toFixed(2)} interest`);
     }
 
     console.log(`Accrual complete. Processed ${totalDatesProcessed} dates, total interest: $${grandTotalInterest.toFixed(2)}`);
@@ -361,6 +401,7 @@ serve(async (req) => {
       mode,
       dates_processed: totalDatesProcessed,
       total_interest_accrued: grandTotalInterest,
+      instruments_skipped: totalSkipped,
       details: allDetails,
     }), {
       status: 200,

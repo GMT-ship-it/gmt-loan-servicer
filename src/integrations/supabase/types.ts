@@ -1023,6 +1023,48 @@ export type Database = {
         }
         Relationships: []
       }
+      fin_accrual_postings: {
+        Row: {
+          accrual_date: string
+          created_at: string
+          id: string
+          instrument_id: string
+          interest_amount: number
+          transaction_id: string | null
+        }
+        Insert: {
+          accrual_date: string
+          created_at?: string
+          id?: string
+          instrument_id: string
+          interest_amount?: number
+          transaction_id?: string | null
+        }
+        Update: {
+          accrual_date?: string
+          created_at?: string
+          id?: string
+          instrument_id?: string
+          interest_amount?: number
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_accrual_postings_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "fin_instruments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fin_accrual_postings_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "fin_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fin_counterparties: {
         Row: {
           created_at: string
