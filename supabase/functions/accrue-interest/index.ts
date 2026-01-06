@@ -1,5 +1,5 @@
 // Deno Deploy (Supabase Edge Function)
-// Daily interest accrual for fin_instruments
+// Daily interest accrual for fin_instruments with catch-up/backfill support
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -15,50 +15,209 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper to add days to a date string
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Helper to get all dates between start (exclusive) and end (inclusive)
+function getDateRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  let current = addDays(startDate, 1);
+  while (current <= endDate) {
+    dates.push(current);
+    current = addDays(current, 1);
+  }
+  return dates;
+}
+
+// Core accrual logic for a single date
+async function runAccrualForDate(
+  runDate: string,
+  instruments: any[],
+  accountByName: Record<string, any>
+): Promise<{ processed: number; totalInterest: number; details: any[] }> {
+  const notesReceivable = accountByName['Notes Receivable'];
+  const notesPayable = accountByName['Notes Payable'];
+  const interestReceivable = accountByName['Interest Receivable'];
+  const interestPayable = accountByName['Interest Payable'];
+  const interestIncome = accountByName['Interest Income'];
+  const interestExpense = accountByName['Interest Expense'];
+
+  const results: any[] = [];
+
+  for (const inst of instruments) {
+    // Determine principal account based on position
+    const principalAccountId = inst.position === 'receivable' 
+      ? notesReceivable.id 
+      : notesPayable.id;
+
+    // Get all transaction lines for this instrument on the principal account up to runDate
+    const { data: principalLines, error: plError } = await supabase
+      .from('fin_transaction_lines')
+      .select('debit, credit, transaction:fin_transactions!inner(date)')
+      .eq('instrument_id', inst.id)
+      .eq('account_id', principalAccountId)
+      .lte('transaction.date', runDate);
+
+    if (plError) {
+      console.error(`Error fetching principal lines for ${inst.id}:`, plError);
+      continue;
+    }
+
+    // Calculate principal outstanding as of runDate
+    let principal = 0;
+    if (inst.position === 'receivable') {
+      principal = (principalLines || []).reduce((sum: number, l: any) => 
+        sum + (l.debit || 0) - (l.credit || 0), 0);
+    } else {
+      principal = (principalLines || []).reduce((sum: number, l: any) => 
+        sum + (l.credit || 0) - (l.debit || 0), 0);
+    }
+
+    if (principal <= 0) {
+      continue;
+    }
+
+    // Calculate daily interest
+    const basisDays = inst.day_count_basis === 'ACT/360' || inst.day_count_basis === '30/360' ? 360 : 365;
+    const dailyRate = inst.rate_apr / basisDays;
+    const interestToday = Math.round(principal * dailyRate * 100) / 100;
+
+    if (interestToday <= 0) {
+      continue;
+    }
+
+    // Create accrual transaction
+    const { data: txn, error: txnError } = await supabase
+      .from('fin_transactions')
+      .insert({
+        entity_id: inst.entity_id,
+        date: runDate,
+        type: 'accrual',
+        memo: `Daily interest accrual for ${inst.name}`,
+        source: 'system',
+      })
+      .select()
+      .single();
+
+    if (txnError) {
+      console.error(`Error creating transaction for ${inst.id}:`, txnError);
+      continue;
+    }
+
+    // Create transaction lines based on position
+    let debitAccountId: string;
+    let creditAccountId: string;
+
+    if (inst.position === 'receivable') {
+      debitAccountId = interestReceivable.id;
+      creditAccountId = interestIncome.id;
+    } else {
+      debitAccountId = interestExpense.id;
+      creditAccountId = interestPayable.id;
+    }
+
+    const { error: linesError } = await supabase
+      .from('fin_transaction_lines')
+      .insert([
+        {
+          transaction_id: txn.id,
+          account_id: debitAccountId,
+          debit: interestToday,
+          credit: null,
+          instrument_id: inst.id,
+          counterparty_id: inst.counterparty_id,
+        },
+        {
+          transaction_id: txn.id,
+          account_id: creditAccountId,
+          debit: null,
+          credit: interestToday,
+          instrument_id: inst.id,
+          counterparty_id: inst.counterparty_id,
+        },
+      ]);
+
+    if (linesError) {
+      console.error(`Error creating transaction lines for ${inst.id}:`, linesError);
+      continue;
+    }
+
+    // Get previous day's accrued interest balance
+    const prevDateStr = addDays(runDate, -1);
+    const { data: prevPosition } = await supabase
+      .from('fin_instrument_daily_positions')
+      .select('accrued_interest_balance')
+      .eq('instrument_id', inst.id)
+      .eq('as_of_date', prevDateStr)
+      .maybeSingle();
+
+    const prevBalance = prevPosition?.accrued_interest_balance || 0;
+    const newBalance = prevBalance + interestToday;
+
+    // Upsert daily position
+    const { error: posError } = await supabase
+      .from('fin_instrument_daily_positions')
+      .upsert({
+        instrument_id: inst.id,
+        as_of_date: runDate,
+        principal_outstanding: principal,
+        interest_accrued_today: interestToday,
+        accrued_interest_balance: newBalance,
+      }, {
+        onConflict: 'instrument_id,as_of_date',
+      });
+
+    if (posError) {
+      console.error(`Error upserting daily position for ${inst.id}:`, posError);
+    }
+
+    results.push({
+      instrument_id: inst.id,
+      instrument_name: inst.name,
+      position: inst.position,
+      principal,
+      interest_accrued: interestToday,
+      accrued_balance: newBalance,
+    });
+  }
+
+  return {
+    processed: results.length,
+    totalInterest: results.reduce((sum, r) => sum + r.interest_accrued, 0),
+    details: results,
+  };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('Starting daily interest accrual job');
+  console.log('Starting interest accrual job');
 
   try {
-    // Parse optional run_date from request body
-    let runDate: string;
+    // Parse request body
+    let mode: 'single' | 'catch_up' = 'catch_up';
+    let targetDate: string = new Date().toISOString().slice(0, 10);
+    
     try {
       const body = await req.json();
-      runDate = body.run_date || new Date().toISOString().slice(0, 10);
+      mode = body.mode || 'catch_up';
+      if (body.run_date) {
+        targetDate = body.run_date;
+      }
     } catch {
-      runDate = new Date().toISOString().slice(0, 10);
-    }
-    console.log(`Accruing interest for date: ${runDate}`);
-
-    // 1) Check for duplicate run
-    const { data: existingRun, error: runCheckError } = await supabase
-      .from('fin_interest_accrual_runs')
-      .select('id')
-      .eq('run_date', runDate)
-      .maybeSingle();
-
-    if (runCheckError) {
-      console.error('Error checking existing run:', runCheckError);
-      throw runCheckError;
+      // Use defaults
     }
 
-    if (existingRun) {
-      console.log(`Accrual already run for ${runDate}, skipping`);
-      return new Response(JSON.stringify({ 
-        ok: true, 
-        message: `Accrual already run for ${runDate}`,
-        skipped: true 
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
-    }
+    console.log(`Mode: ${mode}, Target date: ${targetDate}`);
 
-    // 2) Fetch all active instruments
+    // Fetch all active instruments
     const { data: instruments, error: instError } = await supabase
       .from('fin_instruments')
       .select('*')
@@ -69,9 +228,22 @@ serve(async (req) => {
       throw instError;
     }
 
-    console.log(`Found ${instruments?.length || 0} active instruments`);
+    if (!instruments || instruments.length === 0) {
+      console.log('No active instruments found');
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        message: 'No active instruments to process',
+        dates_processed: 0,
+        total_interest_accrued: 0,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      });
+    }
 
-    // 3) Fetch all accounts for lookups
+    console.log(`Found ${instruments.length} active instruments`);
+
+    // Fetch all accounts for lookups
     const { data: accounts, error: accError } = await supabase
       .from('fin_accounts')
       .select('id, name, type');
@@ -86,196 +258,110 @@ serve(async (req) => {
       return acc;
     }, {});
 
-    // Required accounts
-    const notesReceivable = accountByName['Notes Receivable'];
-    const notesPayable = accountByName['Notes Payable'];
-    const interestReceivable = accountByName['Interest Receivable'];
-    const interestPayable = accountByName['Interest Payable'];
-    const interestIncome = accountByName['Interest Income'];
-    const interestExpense = accountByName['Interest Expense'];
-
-    if (!notesReceivable || !notesPayable || !interestReceivable || !interestPayable || !interestIncome || !interestExpense) {
-      throw new Error('Missing required accounts for accrual. Ensure Notes Receivable/Payable, Interest Receivable/Payable, Interest Income, Interest Expense exist.');
+    // Validate required accounts exist
+    const requiredAccounts = ['Notes Receivable', 'Notes Payable', 'Interest Receivable', 'Interest Payable', 'Interest Income', 'Interest Expense'];
+    for (const accName of requiredAccounts) {
+      if (!accountByName[accName]) {
+        throw new Error(`Missing required account: ${accName}`);
+      }
     }
 
-    const results: any[] = [];
+    // Determine dates to process
+    let datesToProcess: string[] = [];
 
-    // 4) Process each instrument
-    for (const inst of instruments || []) {
-      console.log(`Processing instrument: ${inst.name} (${inst.id})`);
-
-      // Determine principal account based on position
-      const principalAccountId = inst.position === 'receivable' 
-        ? notesReceivable.id 
-        : notesPayable.id;
-
-      // Get all transaction lines for this instrument on the principal account
-      const { data: principalLines, error: plError } = await supabase
-        .from('fin_transaction_lines')
-        .select('debit, credit')
-        .eq('instrument_id', inst.id)
-        .eq('account_id', principalAccountId);
-
-      if (plError) {
-        console.error(`Error fetching principal lines for ${inst.id}:`, plError);
-        continue;
-      }
-
-      // Calculate principal outstanding
-      let principal = 0;
-      if (inst.position === 'receivable') {
-        // Notes Receivable: debits - credits
-        principal = (principalLines || []).reduce((sum: number, l: any) => 
-          sum + (l.debit || 0) - (l.credit || 0), 0);
-      } else {
-        // Notes Payable: credits - debits
-        principal = (principalLines || []).reduce((sum: number, l: any) => 
-          sum + (l.credit || 0) - (l.debit || 0), 0);
-      }
-
-      console.log(`  Principal outstanding: ${principal}`);
-
-      if (principal <= 0) {
-        console.log(`  Skipping - no principal outstanding`);
-        continue;
-      }
-
-      // Calculate daily interest
-      const basisDays = inst.day_count_basis === 'ACT/360' || inst.day_count_basis === '30/360' ? 360 : 365;
-      const dailyRate = inst.rate_apr / basisDays;
-      const interestToday = Math.round(principal * dailyRate * 100) / 100; // Round to 2 decimals
-
-      console.log(`  APR: ${inst.rate_apr}, Basis: ${basisDays}, Daily rate: ${dailyRate}, Interest today: ${interestToday}`);
-
-      if (interestToday <= 0) {
-        console.log(`  Skipping - no interest to accrue`);
-        continue;
-      }
-
-      // 5) Create accrual transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: inst.entity_id,
-          date: runDate,
-          type: 'accrual',
-          memo: `Daily interest accrual for ${inst.name}`,
-          source: 'system',
-        })
-        .select()
-        .single();
-
-      if (txnError) {
-        console.error(`Error creating transaction for ${inst.id}:`, txnError);
-        continue;
-      }
-
-      // 6) Create transaction lines based on position
-      let debitAccountId: string;
-      let creditAccountId: string;
-
-      if (inst.position === 'receivable') {
-        // Dr Interest Receivable, Cr Interest Income
-        debitAccountId = interestReceivable.id;
-        creditAccountId = interestIncome.id;
-      } else {
-        // Dr Interest Expense, Cr Interest Payable
-        debitAccountId = interestExpense.id;
-        creditAccountId = interestPayable.id;
-      }
-
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: debitAccountId,
-            debit: interestToday,
-            credit: null,
-            instrument_id: inst.id,
-            counterparty_id: inst.counterparty_id,
-          },
-          {
-            transaction_id: txn.id,
-            account_id: creditAccountId,
-            debit: null,
-            credit: interestToday,
-            instrument_id: inst.id,
-            counterparty_id: inst.counterparty_id,
-          },
-        ]);
-
-      if (linesError) {
-        console.error(`Error creating transaction lines for ${inst.id}:`, linesError);
-        continue;
-      }
-
-      // 7) Get previous day's accrued interest balance
-      const prevDate = new Date(runDate);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevDateStr = prevDate.toISOString().slice(0, 10);
-
-      const { data: prevPosition, error: prevPosError } = await supabase
-        .from('fin_instrument_daily_positions')
-        .select('accrued_interest_balance')
-        .eq('instrument_id', inst.id)
-        .eq('as_of_date', prevDateStr)
+    if (mode === 'single') {
+      // Single mode: just process the target date
+      datesToProcess = [targetDate];
+    } else {
+      // Catch-up mode: find last run date and process all missing dates
+      const { data: lastRun } = await supabase
+        .from('fin_interest_accrual_runs')
+        .select('run_date')
+        .eq('status', 'completed')
+        .order('run_date', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      const prevBalance = prevPosition?.accrued_interest_balance || 0;
-      const newBalance = prevBalance + interestToday;
-
-      // 8) Upsert daily position
-      const { error: posError } = await supabase
-        .from('fin_instrument_daily_positions')
-        .upsert({
-          instrument_id: inst.id,
-          as_of_date: runDate,
-          principal_outstanding: principal,
-          interest_accrued_today: interestToday,
-          accrued_interest_balance: newBalance,
-        }, {
-          onConflict: 'instrument_id,as_of_date',
-        });
-
-      if (posError) {
-        console.error(`Error upserting daily position for ${inst.id}:`, posError);
+      let startFrom: string;
+      
+      if (lastRun?.run_date) {
+        startFrom = lastRun.run_date;
+        console.log(`Last successful run: ${startFrom}`);
+      } else {
+        // No previous runs - start from earliest instrument start_date or yesterday
+        const earliestStart = instruments.reduce((min: string, inst: any) => {
+          return inst.start_date < min ? inst.start_date : min;
+        }, instruments[0]?.start_date || addDays(targetDate, -1));
+        
+        startFrom = addDays(earliestStart, -1); // Start from day before earliest so we include earliest
+        console.log(`No previous runs. Starting from instrument earliest: ${earliestStart}`);
       }
 
-      results.push({
-        instrument_id: inst.id,
-        instrument_name: inst.name,
-        position: inst.position,
-        principal,
-        interest_accrued: interestToday,
-        accrued_balance: newBalance,
-      });
-
-      console.log(`  Successfully accrued ${interestToday} for ${inst.name}`);
+      datesToProcess = getDateRange(startFrom, targetDate);
+      console.log(`Dates to process: ${datesToProcess.length} (from ${datesToProcess[0] || 'none'} to ${targetDate})`);
     }
 
-    // 9) Record the accrual run
-    const { error: runError } = await supabase
+    // Filter out dates that already have completed runs
+    const { data: existingRuns } = await supabase
       .from('fin_interest_accrual_runs')
-      .insert({
-        run_date: runDate,
-        status: 'completed',
-        instruments_processed: results.length,
-        total_interest_accrued: results.reduce((sum, r) => sum + r.interest_accrued, 0),
-      });
+      .select('run_date')
+      .in('run_date', datesToProcess);
 
-    if (runError) {
-      console.error('Error recording accrual run:', runError);
+    const existingDates = new Set((existingRuns || []).map(r => r.run_date));
+    const filteredDates = datesToProcess.filter(d => !existingDates.has(d));
+
+    console.log(`After filtering existing runs: ${filteredDates.length} dates to process`);
+
+    if (filteredDates.length === 0) {
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        message: 'All dates already processed',
+        dates_processed: 0,
+        total_interest_accrued: 0,
+        skipped: true,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      });
     }
 
-    console.log(`Interest accrual completed. Processed ${results.length} instruments.`);
+    // Process each date
+    let totalDatesProcessed = 0;
+    let grandTotalInterest = 0;
+    const allDetails: any[] = [];
+
+    for (const runDate of filteredDates) {
+      console.log(`Processing date: ${runDate}`);
+      
+      const result = await runAccrualForDate(runDate, instruments, accountByName);
+      
+      // Record the accrual run
+      await supabase
+        .from('fin_interest_accrual_runs')
+        .insert({
+          run_date: runDate,
+          status: 'completed',
+        });
+
+      totalDatesProcessed++;
+      grandTotalInterest += result.totalInterest;
+      allDetails.push({
+        date: runDate,
+        instruments_processed: result.processed,
+        interest_accrued: result.totalInterest,
+      });
+
+      console.log(`  Completed: ${result.processed} instruments, $${result.totalInterest.toFixed(2)} interest`);
+    }
+
+    console.log(`Accrual complete. Processed ${totalDatesProcessed} dates, total interest: $${grandTotalInterest.toFixed(2)}`);
 
     return new Response(JSON.stringify({ 
       ok: true, 
-      run_date: runDate,
-      instruments_processed: results.length,
-      total_interest_accrued: results.reduce((sum, r) => sum + r.interest_accrued, 0),
-      details: results,
+      mode,
+      dates_processed: totalDatesProcessed,
+      total_interest_accrued: grandTotalInterest,
+      details: allDetails,
     }), {
       status: 200,
       headers: { ...corsHeaders, 'content-type': 'application/json' },
