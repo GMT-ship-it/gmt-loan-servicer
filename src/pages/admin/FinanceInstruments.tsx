@@ -54,7 +54,7 @@ const defaultForm: InstrumentForm = {
   instrument_type: 'loan',
   principal_initial: '',
   rate_apr: '',
-  day_count_basis: 'actual_365',
+  day_count_basis: 'ACT/365',
   interest_method: 'simple_daily',
   start_date: new Date().toISOString().split('T')[0],
   maturity_date: '',
@@ -63,7 +63,7 @@ const defaultForm: InstrumentForm = {
 };
 
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
-const dayCountOptions = ['actual_365', 'actual_360', '30_360'];
+const dayCountOptions = ['ACT/365', 'ACT/360', '30/360'];
 const interestMethods = ['simple_daily', 'compound_daily', 'simple_monthly'];
 const statusOptions = ['active', 'paid_off', 'defaulted', 'cancelled'];
 const positionOptions = ['receivable', 'payable'];
@@ -463,7 +463,7 @@ export default function FinanceInstruments() {
                   </SelectTrigger>
                   <SelectContent>
                     {dayCountOptions.map((d) => (
-                      <SelectItem key={d} value={d}>{d.replace('_', '/')}</SelectItem>
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
