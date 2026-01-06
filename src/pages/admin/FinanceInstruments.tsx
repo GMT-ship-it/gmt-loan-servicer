@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
-import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard } from 'lucide-react';
 import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
+import PrincipalDetailsModal from '@/components/admin/PrincipalDetailsModal';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
@@ -81,6 +82,13 @@ type InterestPaidForm = {
   posting_mode: 'expense' | 'payable';
 };
 
+type PrincipalPaymentForm = {
+  date: string;
+  amount: string;
+  memo: string;
+  cash_account_id: string;
+};
+
 const defaultForm: InstrumentForm = {
   name: '',
   entity_id: '',
@@ -109,6 +117,13 @@ const defaultInterestPaidForm: InterestPaidForm = {
   memo: '',
   cash_account_id: '',
   posting_mode: 'expense',
+};
+
+const defaultPrincipalPaymentForm: PrincipalPaymentForm = {
+  date: new Date().toISOString().split('T')[0],
+  amount: '',
+  memo: '',
+  cash_account_id: '',
 };
 
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
@@ -165,6 +180,31 @@ export default function FinanceInstruments() {
   const openAccruedInterestModal = (inst: Instrument) => {
     setAccruedInterestInstrument(inst);
     setAccruedInterestModalOpen(true);
+  };
+
+  // Principal Details drill-down modal state
+  const [principalModalOpen, setPrincipalModalOpen] = useState(false);
+  const [principalModalInstrument, setPrincipalModalInstrument] = useState<Instrument | null>(null);
+
+  const openPrincipalModal = (inst: Instrument) => {
+    setPrincipalModalInstrument(inst);
+    setPrincipalModalOpen(true);
+  };
+
+  // Principal Payment modal state
+  const [principalPaymentOpen, setPrincipalPaymentOpen] = useState(false);
+  const [principalPaymentInstrument, setPrincipalPaymentInstrument] = useState<Instrument | null>(null);
+  const [principalPaymentForm, setPrincipalPaymentForm] = useState<PrincipalPaymentForm>(defaultPrincipalPaymentForm);
+  const [savingPrincipalPayment, setSavingPrincipalPayment] = useState(false);
+
+  const openPrincipalPayment = (inst: Instrument) => {
+    setPrincipalPaymentInstrument(inst);
+    const cashAccount = accounts.find(a => a.name === 'Cash' && a.type === 'asset');
+    setPrincipalPaymentForm({
+      ...defaultPrincipalPaymentForm,
+      cash_account_id: cashAccount?.id || '',
+    });
+    setPrincipalPaymentOpen(true);
   };
 
   const loadData = async () => {
@@ -603,6 +643,91 @@ export default function FinanceInstruments() {
     }
   };
 
+  const handleSavePrincipalPayment = async () => {
+    if (!principalPaymentInstrument) return;
+
+    // Validation
+    if (!principalPaymentForm.date) {
+      notify.error('Validation', 'Date is required');
+      return;
+    }
+    const amount = parseFloat(principalPaymentForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      notify.error('Validation', 'Amount must be greater than 0');
+      return;
+    }
+    if (!principalPaymentForm.cash_account_id) {
+      notify.error('Validation', 'Cash account is required');
+      return;
+    }
+
+    // Find Notes Payable account
+    const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
+    if (!notesPayableAccount) {
+      notify.error('Error', 'Notes Payable account not found. Please create it first.');
+      return;
+    }
+
+    setSavingPrincipalPayment(true);
+    try {
+      // Create transaction
+      const { data: txn, error: txnError } = await supabase
+        .from('fin_transactions')
+        .insert({
+          entity_id: principalPaymentInstrument.entity_id,
+          date: principalPaymentForm.date,
+          type: 'principal_payment',
+          memo: principalPaymentForm.memo || `Principal payment for ${principalPaymentInstrument.name}`,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (txnError) throw txnError;
+
+      // Create transaction lines (double-entry)
+      // Debit: Notes Payable (reduces liability)
+      // Credit: Cash (reduces asset)
+      const { error: linesError } = await supabase
+        .from('fin_transaction_lines')
+        .insert([
+          {
+            transaction_id: txn.id,
+            account_id: notesPayableAccount.id,
+            debit: amount,
+            credit: null,
+            instrument_id: principalPaymentInstrument.id,
+            counterparty_id: principalPaymentInstrument.counterparty_id,
+          },
+          {
+            transaction_id: txn.id,
+            account_id: principalPaymentForm.cash_account_id,
+            debit: null,
+            credit: amount,
+            instrument_id: principalPaymentInstrument.id,
+            counterparty_id: principalPaymentInstrument.counterparty_id,
+          },
+        ]);
+
+      if (linesError) throw linesError;
+
+      notify.success('Success', 'Principal payment recorded successfully');
+      setPrincipalPaymentOpen(false);
+      
+      // Reload data to update positions
+      await loadData();
+      
+      // Reload instrument detail if expanded
+      if (expandedId === principalPaymentInstrument.id) {
+        loadInstrumentDetail(principalPaymentInstrument.id);
+      }
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to record principal payment');
+    } finally {
+      setSavingPrincipalPayment(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this instrument?')) return;
     
@@ -792,6 +917,10 @@ export default function FinanceInstruments() {
                               <DollarSign className="h-4 w-4 mr-1" />
                               Record Funds In
                             </Button>
+                            <Button variant="outline" size="sm" onClick={() => openPrincipalPayment(inst)}>
+                              <CreditCard className="h-4 w-4 mr-1" />
+                              Record Principal Payment
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => openInterestPaid(inst)}>
                               <Banknote className="h-4 w-4 mr-1" />
                               Record Interest Paid
@@ -822,11 +951,18 @@ export default function FinanceInstruments() {
                         <>
                           {/* Balance Summary */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-background rounded-lg p-3 border">
+                            <div 
+                              className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openPrincipalModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openPrincipalModal(inst)}
+                            >
                               <div className="text-sm text-muted-foreground">Principal Outstanding</div>
                               <div className="text-xl font-bold">
                                 {fmtMoney(principalOutstanding[inst.id] || 0)}
                               </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
                             </div>
                             <div 
                               className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
@@ -1280,6 +1416,84 @@ export default function FinanceInstruments() {
         </DialogContent>
       </Dialog>
 
+      {/* Record Principal Payment Dialog */}
+      <Dialog open={principalPaymentOpen} onOpenChange={setPrincipalPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Principal Payment</DialogTitle>
+          </DialogHeader>
+          {principalPaymentInstrument && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-muted-foreground">
+                Recording principal payment for <span className="font-medium text-foreground">{principalPaymentInstrument.name}</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="principal-date">Date *</Label>
+                <Input
+                  id="principal-date"
+                  type="date"
+                  value={principalPaymentForm.date}
+                  onChange={(e) => setPrincipalPaymentForm({ ...principalPaymentForm, date: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="principal-amount">Amount *</Label>
+                <Input
+                  id="principal-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={principalPaymentForm.amount}
+                  onChange={(e) => setPrincipalPaymentForm({ ...principalPaymentForm, amount: e.target.value })}
+                  placeholder="Enter principal payment amount"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="principal-cash-account">Cash Account *</Label>
+                <Select value={principalPaymentForm.cash_account_id} onValueChange={(v) => setPrincipalPaymentForm({ ...principalPaymentForm, cash_account_id: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cash account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assetAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="principal-memo">Memo</Label>
+                <Textarea
+                  id="principal-memo"
+                  value={principalPaymentForm.memo}
+                  onChange={(e) => setPrincipalPaymentForm({ ...principalPaymentForm, memo: e.target.value })}
+                  placeholder="Optional note about this principal payment"
+                  rows={2}
+                />
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="font-medium mb-1">Double-Entry Preview:</div>
+                <div className="text-muted-foreground space-y-1">
+                  <div>• Debit: Notes Payable</div>
+                  <div>• Credit: {assetAccounts.find(a => a.id === principalPaymentForm.cash_account_id)?.name || 'Cash'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrincipalPaymentOpen(false)}>Cancel</Button>
+            <Button onClick={handleSavePrincipalPayment} disabled={savingPrincipalPayment}>
+              {savingPrincipalPayment ? 'Recording...' : 'Record Principal Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Accrued Interest Drill-Down Modal */}
       {accruedInterestInstrument && (
         <AccruedInterestModal
@@ -1288,6 +1502,18 @@ export default function FinanceInstruments() {
           instrumentId={accruedInterestInstrument.id}
           instrumentName={accruedInterestInstrument.name}
           instrumentStartDate={accruedInterestInstrument.start_date}
+        />
+      )}
+
+      {/* Principal Details Drill-Down Modal */}
+      {principalModalInstrument && (
+        <PrincipalDetailsModal
+          open={principalModalOpen}
+          onOpenChange={setPrincipalModalOpen}
+          instrumentId={principalModalInstrument.id}
+          instrumentName={principalModalInstrument.name}
+          instrumentStartDate={principalModalInstrument.start_date}
+          position={principalModalInstrument.position as 'receivable' | 'payable'}
         />
       )}
     </div>
