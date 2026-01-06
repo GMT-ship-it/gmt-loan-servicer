@@ -576,15 +576,21 @@ export default function FinanceInstruments() {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase.functions.invoke('accrue-interest', {
-        body: { run_date: today },
+        body: { run_date: today, mode: 'catch_up' },
       });
       
       if (error) throw error;
       
       if (data?.skipped) {
-        notify.info('Accrual Skipped', `Accrual already run for ${today}`);
+        notify.info('Accrual Up to Date', 'All dates already processed');
       } else {
-        notify.success('Accrual Complete', `Processed ${data?.instruments_processed || 0} instruments, accrued $${(data?.total_interest_accrued || 0).toFixed(2)}`);
+        const datesMsg = data?.dates_processed === 1 
+          ? '1 date' 
+          : `${data?.dates_processed || 0} dates`;
+        notify.success(
+          'Accrual Complete', 
+          `Processed ${datesMsg}, total interest accrued: $${(data?.total_interest_accrued || 0).toFixed(2)}`
+        );
       }
       
       // Refresh data to show updated positions
@@ -612,7 +618,7 @@ export default function FinanceInstruments() {
             disabled={runningAccrual}
           >
             <PlayCircle className={`h-4 w-4 mr-2 ${runningAccrual ? 'animate-spin' : ''}`} />
-            {runningAccrual ? 'Running...' : 'Run Accrual for Today'}
+            {runningAccrual ? 'Running...' : 'Run Accrual (Catch Up)'}
           </Button>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
