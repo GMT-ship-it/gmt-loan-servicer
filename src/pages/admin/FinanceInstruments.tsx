@@ -14,6 +14,7 @@ import { useNotify } from '@/lib/notify';
 import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard } from 'lucide-react';
 import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
 import PrincipalDetailsModal from '@/components/admin/PrincipalDetailsModal';
+import PayoffDetailsModal from '@/components/admin/PayoffDetailsModal';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
@@ -205,6 +206,15 @@ export default function FinanceInstruments() {
       cash_account_id: cashAccount?.id || '',
     });
     setPrincipalPaymentOpen(true);
+  };
+
+  // Payoff Details drill-down modal state
+  const [payoffModalOpen, setPayoffModalOpen] = useState(false);
+  const [payoffModalInstrument, setPayoffModalInstrument] = useState<Instrument | null>(null);
+
+  const openPayoffModal = (inst: Instrument) => {
+    setPayoffModalInstrument(inst);
+    setPayoffModalOpen(true);
   };
 
   const loadData = async () => {
@@ -982,11 +992,18 @@ export default function FinanceInstruments() {
                               </div>
                               <div className="text-xs text-primary mt-1">Click for details →</div>
                             </div>
-                            <div className="bg-background rounded-lg p-3 border col-span-2 md:col-span-2">
+                            <div 
+                              className="bg-background rounded-lg p-3 border col-span-2 md:col-span-2 cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openPayoffModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openPayoffModal(inst)}
+                            >
                               <div className="text-sm text-muted-foreground">Payoff Balance</div>
                               <div className="text-2xl font-bold text-primary">
                                 {fmtMoney((principalOutstanding[inst.id] || 0) + (accruedInterest[inst.id] || 0))}
                               </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
                             </div>
                           </div>
 
@@ -1514,6 +1531,17 @@ export default function FinanceInstruments() {
           instrumentName={principalModalInstrument.name}
           instrumentStartDate={principalModalInstrument.start_date}
           position={principalModalInstrument.position as 'receivable' | 'payable'}
+        />
+      )}
+
+      {/* Payoff Details Drill-Down Modal */}
+      {payoffModalInstrument && (
+        <PayoffDetailsModal
+          open={payoffModalOpen}
+          onOpenChange={setPayoffModalOpen}
+          instrumentId={payoffModalInstrument.id}
+          instrumentName={payoffModalInstrument.name}
+          instrumentStartDate={payoffModalInstrument.start_date}
         />
       )}
     </div>
