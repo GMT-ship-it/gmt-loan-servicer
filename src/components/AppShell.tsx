@@ -1,6 +1,12 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Bell, LogOut } from 'lucide-react';
+import { Bell, LogOut, ChevronDown } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import CompactToggle from '@/components/CompactToggle';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -143,6 +149,29 @@ export default function AppShell() {
                   >
                     Reports
                   </Link>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className={`flex items-center gap-1 hover:text-primary whitespace-nowrap transition-colors ${pathname.startsWith('/admin/finance') ? 'text-foreground font-semibold' : 'text-foreground/80'}`}>
+                      Finance
+                      <ChevronDown className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/finance/instruments" className="w-full">
+                          Instruments
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/finance/entities" className="w-full">
+                          Entities
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/finance/counterparties" className="w-full">
+                          Counterparties
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
               {isBorrower && (
