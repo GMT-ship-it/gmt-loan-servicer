@@ -351,7 +351,7 @@ export default function FinanceInstruments() {
         .insert({
           entity_id: fundsInInstrument.entity_id,
           date: fundsInForm.date,
-          type: 'deposit',
+          type: 'funds_in',
           memo: fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`,
           source: 'manual',
         })
