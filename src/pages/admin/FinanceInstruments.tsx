@@ -145,17 +145,22 @@ export default function FinanceInstruments() {
   // Expanded instrument detail state
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [principalOutstanding, setPrincipalOutstanding] = useState<Record<string, number>>({});
+  const [accruedInterest, setAccruedInterest] = useState<Record<string, number>>({});
+  const [latestAccrualDate, setLatestAccrualDate] = useState<Record<string, string>>({});
   const [fundingHistory, setFundingHistory] = useState<Record<string, FundingEntry[]>>({});
   const [interestPaidHistory, setInterestPaidHistory] = useState<Record<string, InterestPaidEntry[]>>({});
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
   
   // Accrual state
   const [runningAccrual, setRunningAccrual] = useState(false);
+  
+  // Instrument positions (loaded for all instruments)
+  const [instrumentPositions, setInstrumentPositions] = useState<Record<string, { principal: number; accrued: number; asOfDate: string | null }>>({});
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [instRes, entRes, cpRes, accRes] = await Promise.all([
+      const [instRes, entRes, cpRes, accRes, posRes] = await Promise.all([
         supabase.from('fin_instruments').select(`
           *,
           entity:fin_entities(id, name),
@@ -164,6 +169,10 @@ export default function FinanceInstruments() {
         supabase.from('fin_entities').select('id, name').order('name'),
         supabase.from('fin_counterparties').select('id, name, type').order('name'),
         supabase.from('fin_accounts').select('id, name, type').order('name'),
+        // Get latest daily position for each instrument
+        supabase.from('fin_instrument_daily_positions')
+          .select('instrument_id, as_of_date, principal_outstanding, accrued_interest_balance')
+          .order('as_of_date', { ascending: false }),
       ]);
 
       if (instRes.error) throw instRes.error;
@@ -175,6 +184,19 @@ export default function FinanceInstruments() {
       setEntities(entRes.data || []);
       setCounterparties(cpRes.data || []);
       setAccounts(accRes.data || []);
+      
+      // Build positions map (latest position per instrument)
+      const posMap: Record<string, { principal: number; accrued: number; asOfDate: string | null }> = {};
+      for (const pos of posRes.data || []) {
+        if (!posMap[pos.instrument_id]) {
+          posMap[pos.instrument_id] = {
+            principal: pos.principal_outstanding || 0,
+            accrued: pos.accrued_interest_balance || 0,
+            asOfDate: pos.as_of_date,
+          };
+        }
+      }
+      setInstrumentPositions(posMap);
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to load data');
     } finally {
@@ -190,25 +212,37 @@ export default function FinanceInstruments() {
     setLoadingDetail(instrumentId);
     try {
       // Get all transaction lines for this instrument
-      const { data: lines, error } = await supabase
-        .from('fin_transaction_lines')
-        .select(`
-          credit,
-          debit,
-          transaction:fin_transactions!inner(id, date, memo, type),
-          account:fin_accounts!inner(name),
-          counterparty:fin_counterparties(name)
-        `)
-        .eq('instrument_id', instrumentId);
+      const [linesRes, positionsRes] = await Promise.all([
+        supabase
+          .from('fin_transaction_lines')
+          .select(`
+            credit,
+            debit,
+            transaction:fin_transactions!inner(id, date, memo, type),
+            account:fin_accounts!inner(name),
+            counterparty:fin_counterparties(name)
+          `)
+          .eq('instrument_id', instrumentId),
+        // Get latest position for accrued interest
+        supabase
+          .from('fin_instrument_daily_positions')
+          .select('principal_outstanding, accrued_interest_balance, as_of_date')
+          .eq('instrument_id', instrumentId)
+          .order('as_of_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
-      if (error) throw error;
+      if (linesRes.error) throw linesRes.error;
+      const lines = linesRes.data || [];
 
       // Calculate principal outstanding (credits - debits on Notes Payable)
       let principal = 0;
       const funding: FundingEntry[] = [];
       const interestPaid: InterestPaidEntry[] = [];
+      const seenTxIds = new Set<string>();
 
-      (lines || []).forEach((line: any) => {
+      lines.forEach((line: any) => {
         if (line.account?.name === 'Notes Payable') {
           principal += (line.credit || 0) - (line.debit || 0);
           // Each credit to Notes Payable is a funding entry
@@ -222,14 +256,23 @@ export default function FinanceInstruments() {
             });
           }
         }
-        // Interest paid entries: debit to Interest Expense or Interest Payable
-        if ((line.account?.name === 'Interest Expense' || line.account?.name === 'Interest Payable') && line.debit && line.debit > 0) {
-          interestPaid.push({
-            id: line.transaction?.id || '',
-            date: line.transaction?.date || '',
-            amount: line.debit,
-            memo: line.transaction?.memo || null,
-          });
+        // Interest paid entries: debit to Interest Expense or Interest Payable (exclude accruals)
+        if (
+          (line.account?.name === 'Interest Expense' || line.account?.name === 'Interest Payable') && 
+          line.debit && 
+          line.debit > 0 &&
+          line.transaction?.type !== 'accrual'
+        ) {
+          // Dedupe by transaction id
+          if (!seenTxIds.has(line.transaction?.id)) {
+            seenTxIds.add(line.transaction?.id);
+            interestPaid.push({
+              id: line.transaction?.id || '',
+              date: line.transaction?.date || '',
+              amount: line.debit,
+              memo: line.transaction?.memo || null,
+            });
+          }
         }
       });
 
@@ -242,6 +285,15 @@ export default function FinanceInstruments() {
         ...prev,
         [instrumentId]: interestPaid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       }));
+      
+      // Set accrued interest from daily positions
+      if (positionsRes.data) {
+        setAccruedInterest(prev => ({ ...prev, [instrumentId]: positionsRes.data.accrued_interest_balance || 0 }));
+        setLatestAccrualDate(prev => ({ ...prev, [instrumentId]: positionsRes.data.as_of_date || '' }));
+      } else {
+        setAccruedInterest(prev => ({ ...prev, [instrumentId]: 0 }));
+        setLatestAccrualDate(prev => ({ ...prev, [instrumentId]: '' }));
+      }
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to load instrument detail');
     } finally {
@@ -694,8 +746,25 @@ export default function FinanceInstruments() {
                     </div>
                     <div className="flex items-center gap-6">
                       <div className="text-right">
-                        <div className="text-sm text-muted-foreground">Initial Principal</div>
-                        <div className="font-medium">{fmtMoney(inst.principal_initial)}</div>
+                        <div className="text-sm text-muted-foreground">Principal</div>
+                        <div className="font-medium">
+                          {fmtMoney(instrumentPositions[inst.id]?.principal || inst.principal_initial)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">Accrued Int.</div>
+                        <div className="font-medium">
+                          {fmtMoney(instrumentPositions[inst.id]?.accrued || 0)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">Payoff</div>
+                        <div className="font-medium text-primary">
+                          {fmtMoney(
+                            (instrumentPositions[inst.id]?.principal || inst.principal_initial) + 
+                            (instrumentPositions[inst.id]?.accrued || 0)
+                          )}
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-muted-foreground">APR</div>
@@ -741,12 +810,29 @@ export default function FinanceInstruments() {
                         <div className="text-center py-4 text-muted-foreground">Loading details...</div>
                       ) : (
                         <>
-                          {/* Principal Outstanding */}
-                          <div className="flex items-center gap-8">
-                            <div>
-                              <div className="text-sm text-muted-foreground">Principal Outstanding (from Ledger)</div>
-                              <div className="text-2xl font-bold">
+                          {/* Balance Summary */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-background rounded-lg p-3 border">
+                              <div className="text-sm text-muted-foreground">Principal Outstanding</div>
+                              <div className="text-xl font-bold">
                                 {fmtMoney(principalOutstanding[inst.id] || 0)}
+                              </div>
+                            </div>
+                            <div className="bg-background rounded-lg p-3 border">
+                              <div className="text-sm text-muted-foreground">
+                                Accrued Interest
+                                {latestAccrualDate[inst.id] && (
+                                  <span className="text-xs ml-1">(as of {latestAccrualDate[inst.id]})</span>
+                                )}
+                              </div>
+                              <div className="text-xl font-bold">
+                                {fmtMoney(accruedInterest[inst.id] || 0)}
+                              </div>
+                            </div>
+                            <div className="bg-background rounded-lg p-3 border col-span-2 md:col-span-2">
+                              <div className="text-sm text-muted-foreground">Payoff Balance</div>
+                              <div className="text-2xl font-bold text-primary">
+                                {fmtMoney((principalOutstanding[inst.id] || 0) + (accruedInterest[inst.id] || 0))}
                               </div>
                             </div>
                           </div>
