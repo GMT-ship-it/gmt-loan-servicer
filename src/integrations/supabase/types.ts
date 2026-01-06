@@ -996,6 +996,321 @@ export type Database = {
           },
         ]
       }
+      fin_accounts: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fin_counterparties: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fin_entities: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      fin_instrument_daily_positions: {
+        Row: {
+          accrued_interest_balance: number
+          as_of_date: string
+          created_at: string
+          id: string
+          instrument_id: string
+          interest_accrued_today: number
+          principal_outstanding: number
+        }
+        Insert: {
+          accrued_interest_balance?: number
+          as_of_date: string
+          created_at?: string
+          id?: string
+          instrument_id: string
+          interest_accrued_today?: number
+          principal_outstanding?: number
+        }
+        Update: {
+          accrued_interest_balance?: number
+          as_of_date?: string
+          created_at?: string
+          id?: string
+          instrument_id?: string
+          interest_accrued_today?: number
+          principal_outstanding?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_instrument_daily_positions_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "fin_instruments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fin_instruments: {
+        Row: {
+          counterparty_id: string
+          created_at: string
+          day_count_basis: string
+          entity_id: string
+          id: string
+          instrument_type: string
+          interest_method: string
+          maturity_date: string | null
+          name: string
+          principal_initial: number
+          rate_apr: number
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          counterparty_id: string
+          created_at?: string
+          day_count_basis?: string
+          entity_id: string
+          id?: string
+          instrument_type: string
+          interest_method?: string
+          maturity_date?: string | null
+          name: string
+          principal_initial: number
+          rate_apr: number
+          start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          counterparty_id?: string
+          created_at?: string
+          day_count_basis?: string
+          entity_id?: string
+          id?: string
+          instrument_type?: string
+          interest_method?: string
+          maturity_date?: string | null
+          name?: string
+          principal_initial?: number
+          rate_apr?: number
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_instruments_counterparty_id_fkey"
+            columns: ["counterparty_id"]
+            isOneToOne: false
+            referencedRelation: "fin_counterparties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fin_instruments_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "fin_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fin_interest_accrual_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          run_date: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          run_date: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          run_date?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      fin_transaction_lines: {
+        Row: {
+          account_id: string
+          counterparty_id: string | null
+          created_at: string
+          credit: number | null
+          debit: number | null
+          id: string
+          instrument_id: string | null
+          transaction_id: string
+        }
+        Insert: {
+          account_id: string
+          counterparty_id?: string | null
+          created_at?: string
+          credit?: number | null
+          debit?: number | null
+          id?: string
+          instrument_id?: string | null
+          transaction_id: string
+        }
+        Update: {
+          account_id?: string
+          counterparty_id?: string | null
+          created_at?: string
+          credit?: number | null
+          debit?: number | null
+          id?: string
+          instrument_id?: string | null
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_transaction_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "fin_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fin_transaction_lines_counterparty_id_fkey"
+            columns: ["counterparty_id"]
+            isOneToOne: false
+            referencedRelation: "fin_counterparties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fin_transaction_lines_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "fin_instruments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fin_transaction_lines_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "fin_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fin_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          date: string
+          entity_id: string
+          external_ref: string | null
+          id: string
+          memo: string | null
+          source: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          date: string
+          entity_id: string
+          external_ref?: string | null
+          id?: string
+          memo?: string | null
+          source?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          entity_id?: string
+          external_ref?: string | null
+          id?: string
+          memo?: string | null
+          source?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_transactions_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "fin_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journal_entries: {
         Row: {
           account_code: string
