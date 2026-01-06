@@ -1117,6 +1117,7 @@ export type Database = {
           interest_method: string
           maturity_date: string | null
           name: string
+          position: string
           principal_initial: number
           rate_apr: number
           start_date: string
@@ -1133,6 +1134,7 @@ export type Database = {
           interest_method?: string
           maturity_date?: string | null
           name: string
+          position?: string
           principal_initial: number
           rate_apr: number
           start_date: string
@@ -1149,6 +1151,7 @@ export type Database = {
           interest_method?: string
           maturity_date?: string | null
           name?: string
+          position?: string
           principal_initial?: number
           rate_apr?: number
           start_date?: string
