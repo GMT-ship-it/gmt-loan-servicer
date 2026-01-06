@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
-import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
@@ -148,6 +148,9 @@ export default function FinanceInstruments() {
   const [fundingHistory, setFundingHistory] = useState<Record<string, FundingEntry[]>>({});
   const [interestPaidHistory, setInterestPaidHistory] = useState<Record<string, InterestPaidEntry[]>>({});
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+  
+  // Accrual state
+  const [runningAccrual, setRunningAccrual] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -568,6 +571,32 @@ export default function FinanceInstruments() {
 
   const assetAccounts = accounts.filter(a => a.type === 'asset');
 
+  const handleRunAccrual = async () => {
+    setRunningAccrual(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data, error } = await supabase.functions.invoke('accrue-interest', {
+        body: { run_date: today },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.skipped) {
+        notify.info('Accrual Skipped', `Accrual already run for ${today}`);
+      } else {
+        notify.success('Accrual Complete', `Processed ${data?.instruments_processed || 0} instruments, accrued $${(data?.total_interest_accrued || 0).toFixed(2)}`);
+      }
+      
+      // Refresh data to show updated positions
+      await loadData();
+    } catch (err: any) {
+      console.error('Accrual error:', err);
+      notify.error('Accrual Failed', err.message || 'Failed to run accrual');
+    } finally {
+      setRunningAccrual(false);
+    }
+  };
+
   return (
     <div className="space-y-6 py-6">
       <div className="flex items-center justify-between">
@@ -576,6 +605,15 @@ export default function FinanceInstruments() {
           <p className="text-muted-foreground">Manage loans, lines of credit, and other instruments</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRunAccrual} 
+            disabled={runningAccrual}
+          >
+            <PlayCircle className={`h-4 w-4 mr-2 ${runningAccrual ? 'animate-spin' : ''}`} />
+            {runningAccrual ? 'Running...' : 'Run Accrual for Today'}
+          </Button>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
