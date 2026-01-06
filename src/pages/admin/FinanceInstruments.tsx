@@ -8,12 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { useNotify } from '@/lib/notify';
-import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
 type Counterparty = { id: string; name: string; type: string };
+type Account = { id: string; name: string; type: string };
 type Instrument = {
   id: string;
   name: string;
@@ -32,6 +34,14 @@ type Instrument = {
   counterparty?: Counterparty;
 };
 
+type FundingEntry = {
+  id: string;
+  date: string;
+  amount: number;
+  memo: string | null;
+  counterparty_name: string;
+};
+
 type InstrumentForm = {
   name: string;
   entity_id: string;
@@ -45,6 +55,13 @@ type InstrumentForm = {
   maturity_date: string;
   status: string;
   position: string;
+};
+
+type FundsInForm = {
+  date: string;
+  amount: string;
+  memo: string;
+  cash_account_id: string;
 };
 
 const defaultForm: InstrumentForm = {
@@ -62,6 +79,13 @@ const defaultForm: InstrumentForm = {
   position: 'receivable',
 };
 
+const defaultFundsInForm: FundsInForm = {
+  date: new Date().toISOString().split('T')[0],
+  amount: '',
+  memo: '',
+  cash_account_id: '',
+};
+
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
 const dayCountOptions = ['ACT/365', 'ACT/360', '30/360'];
 const interestMethods = ['simple', 'compound'];
@@ -74,6 +98,7 @@ export default function FinanceInstruments() {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -81,10 +106,22 @@ export default function FinanceInstruments() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Funds In modal state
+  const [fundsInOpen, setFundsInOpen] = useState(false);
+  const [fundsInInstrument, setFundsInInstrument] = useState<Instrument | null>(null);
+  const [fundsInForm, setFundsInForm] = useState<FundsInForm>(defaultFundsInForm);
+  const [savingFundsIn, setSavingFundsIn] = useState(false);
+
+  // Expanded instrument detail state
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [principalOutstanding, setPrincipalOutstanding] = useState<Record<string, number>>({});
+  const [fundingHistory, setFundingHistory] = useState<Record<string, FundingEntry[]>>({});
+  const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [instRes, entRes, cpRes] = await Promise.all([
+      const [instRes, entRes, cpRes, accRes] = await Promise.all([
         supabase.from('fin_instruments').select(`
           *,
           entity:fin_entities(id, name),
@@ -92,15 +129,18 @@ export default function FinanceInstruments() {
         `).order('created_at', { ascending: false }),
         supabase.from('fin_entities').select('id, name').order('name'),
         supabase.from('fin_counterparties').select('id, name, type').order('name'),
+        supabase.from('fin_accounts').select('id, name, type').order('name'),
       ]);
 
       if (instRes.error) throw instRes.error;
       if (entRes.error) throw entRes.error;
       if (cpRes.error) throw cpRes.error;
+      if (accRes.error) throw accRes.error;
 
       setInstruments(instRes.data || []);
       setEntities(entRes.data || []);
       setCounterparties(cpRes.data || []);
+      setAccounts(accRes.data || []);
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to load data');
     } finally {
@@ -111,6 +151,66 @@ export default function FinanceInstruments() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const loadInstrumentDetail = async (instrumentId: string) => {
+    setLoadingDetail(instrumentId);
+    try {
+      // Get principal outstanding from ledger (for payable: credits - debits on Notes Payable)
+      const { data: lines, error } = await supabase
+        .from('fin_transaction_lines')
+        .select(`
+          credit,
+          debit,
+          transaction:fin_transactions!inner(id, date, memo),
+          account:fin_accounts!inner(name),
+          counterparty:fin_counterparties(name)
+        `)
+        .eq('instrument_id', instrumentId);
+
+      if (error) throw error;
+
+      // Calculate principal outstanding (credits - debits on Notes Payable)
+      let principal = 0;
+      const funding: FundingEntry[] = [];
+
+      (lines || []).forEach((line: any) => {
+        if (line.account?.name === 'Notes Payable') {
+          principal += (line.credit || 0) - (line.debit || 0);
+          // Each credit to Notes Payable is a funding entry
+          if (line.credit && line.credit > 0) {
+            funding.push({
+              id: line.transaction?.id || '',
+              date: line.transaction?.date || '',
+              amount: line.credit,
+              memo: line.transaction?.memo || null,
+              counterparty_name: line.counterparty?.name || '—',
+            });
+          }
+        }
+      });
+
+      setPrincipalOutstanding(prev => ({ ...prev, [instrumentId]: principal }));
+      setFundingHistory(prev => ({ 
+        ...prev, 
+        [instrumentId]: funding.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+      }));
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to load instrument detail');
+    } finally {
+      setLoadingDetail(null);
+    }
+  };
+
+  const toggleExpand = (inst: Instrument) => {
+    if (expandedId === inst.id) {
+      setExpandedId(null);
+    } else {
+      setExpandedId(inst.id);
+      if (inst.position === 'payable') {
+        loadInstrumentDetail(inst.id);
+      }
+    }
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -135,6 +235,17 @@ export default function FinanceInstruments() {
       position: inst.position,
     });
     setDialogOpen(true);
+  };
+
+  const openFundsIn = (inst: Instrument) => {
+    setFundsInInstrument(inst);
+    // Find Cash account as default
+    const cashAccount = accounts.find(a => a.name === 'Cash' && a.type === 'asset');
+    setFundsInForm({
+      ...defaultFundsInForm,
+      cash_account_id: cashAccount?.id || '',
+    });
+    setFundsInOpen(true);
   };
 
   const handleSave = async () => {
@@ -207,6 +318,86 @@ export default function FinanceInstruments() {
     }
   };
 
+  const handleSaveFundsIn = async () => {
+    if (!fundsInInstrument) return;
+
+    // Validation
+    if (!fundsInForm.date) {
+      notify.error('Validation', 'Date is required');
+      return;
+    }
+    const amount = parseFloat(fundsInForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      notify.error('Validation', 'Amount must be greater than 0');
+      return;
+    }
+    if (!fundsInForm.cash_account_id) {
+      notify.error('Validation', 'Cash account is required');
+      return;
+    }
+
+    // Find Notes Payable account
+    const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
+    if (!notesPayableAccount) {
+      notify.error('Error', 'Notes Payable account not found. Please create it first.');
+      return;
+    }
+
+    setSavingFundsIn(true);
+    try {
+      // Create transaction
+      const { data: txn, error: txnError } = await supabase
+        .from('fin_transactions')
+        .insert({
+          entity_id: fundsInInstrument.entity_id,
+          date: fundsInForm.date,
+          type: 'deposit',
+          memo: fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (txnError) throw txnError;
+
+      // Create transaction lines (double-entry)
+      const { error: linesError } = await supabase
+        .from('fin_transaction_lines')
+        .insert([
+          {
+            transaction_id: txn.id,
+            account_id: fundsInForm.cash_account_id,
+            debit: amount,
+            credit: null,
+            instrument_id: fundsInInstrument.id,
+            counterparty_id: fundsInInstrument.counterparty_id,
+          },
+          {
+            transaction_id: txn.id,
+            account_id: notesPayableAccount.id,
+            debit: null,
+            credit: amount,
+            instrument_id: fundsInInstrument.id,
+            counterparty_id: fundsInInstrument.counterparty_id,
+          },
+        ]);
+
+      if (linesError) throw linesError;
+
+      notify.success('Success', 'Funds recorded successfully');
+      setFundsInOpen(false);
+      
+      // Reload instrument detail if expanded
+      if (expandedId === fundsInInstrument.id) {
+        loadInstrumentDetail(fundsInInstrument.id);
+      }
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to record funds');
+    } finally {
+      setSavingFundsIn(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this instrument?')) return;
     
@@ -214,7 +405,7 @@ export default function FinanceInstruments() {
     try {
       const { error } = await supabase.from('fin_instruments').delete().eq('id', id);
       if (error) throw error;
-      notify.success('Success', 'Instrument deleted');
+      notify.success('Deleted', 'Instrument removed');
       loadData();
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to delete');
@@ -234,6 +425,8 @@ export default function FinanceInstruments() {
       default: return 'outline';
     }
   };
+
+  const assetAccounts = accounts.filter(a => a.type === 'asset');
 
   return (
     <div className="space-y-6 py-6">
@@ -285,35 +478,57 @@ export default function FinanceInstruments() {
               No instruments found. Create one to get started.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Entity</TableHead>
-                  <TableHead>Counterparty</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Principal</TableHead>
-                  <TableHead className="text-right">APR</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {instruments.map((inst) => (
-                  <TableRow key={inst.id}>
-                    <TableCell className="font-medium">{inst.name}</TableCell>
-                    <TableCell>{inst.entity?.name || '—'}</TableCell>
-                    <TableCell>{inst.counterparty?.name || '—'}</TableCell>
-                    <TableCell className="capitalize">{inst.instrument_type.replace('_', ' ')}</TableCell>
-                    <TableCell className="text-right">{fmtMoney(inst.principal_initial)}</TableCell>
-                    <TableCell className="text-right">{fmtPct(inst.rate_apr)}</TableCell>
-                    <TableCell>{inst.start_date}</TableCell>
-                    <TableCell>
+            <div className="space-y-2">
+              {instruments.map((inst) => (
+                <div key={inst.id} className="border rounded-lg">
+                  {/* Instrument Row */}
+                  <div 
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50"
+                    onClick={() => toggleExpand(inst)}
+                  >
+                    <div className="flex items-center gap-4">
+                      {inst.position === 'payable' ? (
+                        expandedId === inst.id ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )
+                      ) : (
+                        <div className="w-4" />
+                      )}
+                      <div>
+                        <div className="font-medium flex items-center gap-2">
+                          {inst.name}
+                          <Badge variant={inst.position === 'payable' ? 'secondary' : 'outline'} className="text-xs">
+                            {inst.position}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {inst.entity?.name} → {inst.counterparty?.name}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">Initial Principal</div>
+                        <div className="font-medium">{fmtMoney(inst.principal_initial)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">APR</div>
+                        <div className="font-medium">{fmtPct(inst.rate_apr)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground">Start Date</div>
+                        <div className="font-medium">{inst.start_date}</div>
+                      </div>
                       <Badge variant={statusColor(inst.status)}>{inst.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {inst.position === 'payable' && (
+                          <Button variant="outline" size="sm" onClick={() => openFundsIn(inst)}>
+                            <DollarSign className="h-4 w-4 mr-1" />
+                            Record Funds In
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={() => openEdit(inst)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -326,11 +541,63 @@ export default function FinanceInstruments() {
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  </div>
+
+                  {/* Expanded Detail for Payable Instruments */}
+                  {expandedId === inst.id && inst.position === 'payable' && (
+                    <div className="border-t p-4 bg-muted/30 space-y-4">
+                      {loadingDetail === inst.id ? (
+                        <div className="text-center py-4 text-muted-foreground">Loading details...</div>
+                      ) : (
+                        <>
+                          {/* Principal Outstanding */}
+                          <div className="flex items-center gap-8">
+                            <div>
+                              <div className="text-sm text-muted-foreground">Principal Outstanding (from Ledger)</div>
+                              <div className="text-2xl font-bold">
+                                {fmtMoney(principalOutstanding[inst.id] || 0)}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Funding History Table */}
+                          <div>
+                            <h4 className="font-medium mb-2">Funding History</h4>
+                            {(fundingHistory[inst.id] || []).length === 0 ? (
+                              <div className="text-sm text-muted-foreground py-2">
+                                No funding recorded yet. Use "Record Funds In" to add entries.
+                              </div>
+                            ) : (
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Lender/Counterparty</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Memo</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {(fundingHistory[inst.id] || []).map((entry) => (
+                                    <TableRow key={entry.id}>
+                                      <TableCell>{entry.date}</TableCell>
+                                      <TableCell>{entry.counterparty_name}</TableCell>
+                                      <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
+                                      <TableCell className="text-muted-foreground">{entry.memo || '—'}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -412,23 +679,7 @@ export default function FinanceInstruments() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((s) => (
-                      <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="principal">Principal Initial *</Label>
+                <Label htmlFor="principal">Initial Principal {form.position === 'payable' ? '(can be 0)' : '*'}</Label>
                 <Input
                   id="principal"
                   type="number"
@@ -485,6 +736,22 @@ export default function FinanceInstruments() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusOptions.map((s) => (
+                      <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="start">Start Date *</Label>
                 <Input
                   id="start"
@@ -508,6 +775,84 @@ export default function FinanceInstruments() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Funds In Dialog */}
+      <Dialog open={fundsInOpen} onOpenChange={setFundsInOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Funds In</DialogTitle>
+          </DialogHeader>
+          {fundsInInstrument && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-muted-foreground">
+                Recording funds received for <span className="font-medium text-foreground">{fundsInInstrument.name}</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="funds-date">Date *</Label>
+                <Input
+                  id="funds-date"
+                  type="date"
+                  value={fundsInForm.date}
+                  onChange={(e) => setFundsInForm({ ...fundsInForm, date: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="funds-amount">Amount *</Label>
+                <Input
+                  id="funds-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={fundsInForm.amount}
+                  onChange={(e) => setFundsInForm({ ...fundsInForm, amount: e.target.value })}
+                  placeholder="Enter amount received"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="funds-cash-account">Cash Account *</Label>
+                <Select value={fundsInForm.cash_account_id} onValueChange={(v) => setFundsInForm({ ...fundsInForm, cash_account_id: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cash account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assetAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="funds-memo">Memo</Label>
+                <Textarea
+                  id="funds-memo"
+                  value={fundsInForm.memo}
+                  onChange={(e) => setFundsInForm({ ...fundsInForm, memo: e.target.value })}
+                  placeholder="Optional note about this funding"
+                  rows={2}
+                />
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="font-medium mb-1">Double-Entry Preview:</div>
+                <div className="text-muted-foreground space-y-1">
+                  <div>• Debit: {assetAccounts.find(a => a.id === fundsInForm.cash_account_id)?.name || 'Cash'}</div>
+                  <div>• Credit: Notes Payable</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFundsInOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveFundsIn} disabled={savingFundsIn}>
+              {savingFundsIn ? 'Recording...' : 'Record Funds'}
             </Button>
           </DialogFooter>
         </DialogContent>
