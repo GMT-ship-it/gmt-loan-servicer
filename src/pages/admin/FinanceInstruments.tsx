@@ -152,8 +152,8 @@ export default function FinanceInstruments() {
       return;
     }
     const principal = parseFloat(form.principal_initial);
-    if (isNaN(principal) || principal <= 0) {
-      notify.error('Validation', 'Principal must be a positive number');
+    if (isNaN(principal) || principal < 0) {
+      notify.error('Validation', 'Principal must be 0 or greater');
       return;
     }
     const apr = parseFloat(form.rate_apr);
