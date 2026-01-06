@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
-import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
@@ -42,6 +43,13 @@ type FundingEntry = {
   counterparty_name: string;
 };
 
+type InterestPaidEntry = {
+  id: string;
+  date: string;
+  amount: number;
+  memo: string | null;
+};
+
 type InstrumentForm = {
   name: string;
   entity_id: string;
@@ -64,6 +72,14 @@ type FundsInForm = {
   cash_account_id: string;
 };
 
+type InterestPaidForm = {
+  date: string;
+  amount: string;
+  memo: string;
+  cash_account_id: string;
+  posting_mode: 'expense' | 'payable';
+};
+
 const defaultForm: InstrumentForm = {
   name: '',
   entity_id: '',
@@ -84,6 +100,14 @@ const defaultFundsInForm: FundsInForm = {
   amount: '',
   memo: '',
   cash_account_id: '',
+};
+
+const defaultInterestPaidForm: InterestPaidForm = {
+  date: new Date().toISOString().split('T')[0],
+  amount: '',
+  memo: '',
+  cash_account_id: '',
+  posting_mode: 'expense',
 };
 
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
@@ -112,10 +136,17 @@ export default function FinanceInstruments() {
   const [fundsInForm, setFundsInForm] = useState<FundsInForm>(defaultFundsInForm);
   const [savingFundsIn, setSavingFundsIn] = useState(false);
 
+  // Interest Paid modal state
+  const [interestPaidOpen, setInterestPaidOpen] = useState(false);
+  const [interestPaidInstrument, setInterestPaidInstrument] = useState<Instrument | null>(null);
+  const [interestPaidForm, setInterestPaidForm] = useState<InterestPaidForm>(defaultInterestPaidForm);
+  const [savingInterestPaid, setSavingInterestPaid] = useState(false);
+
   // Expanded instrument detail state
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [principalOutstanding, setPrincipalOutstanding] = useState<Record<string, number>>({});
   const [fundingHistory, setFundingHistory] = useState<Record<string, FundingEntry[]>>({});
+  const [interestPaidHistory, setInterestPaidHistory] = useState<Record<string, InterestPaidEntry[]>>({});
   const [loadingDetail, setLoadingDetail] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -155,13 +186,13 @@ export default function FinanceInstruments() {
   const loadInstrumentDetail = async (instrumentId: string) => {
     setLoadingDetail(instrumentId);
     try {
-      // Get principal outstanding from ledger (for payable: credits - debits on Notes Payable)
+      // Get all transaction lines for this instrument
       const { data: lines, error } = await supabase
         .from('fin_transaction_lines')
         .select(`
           credit,
           debit,
-          transaction:fin_transactions!inner(id, date, memo),
+          transaction:fin_transactions!inner(id, date, memo, type),
           account:fin_accounts!inner(name),
           counterparty:fin_counterparties(name)
         `)
@@ -172,6 +203,7 @@ export default function FinanceInstruments() {
       // Calculate principal outstanding (credits - debits on Notes Payable)
       let principal = 0;
       const funding: FundingEntry[] = [];
+      const interestPaid: InterestPaidEntry[] = [];
 
       (lines || []).forEach((line: any) => {
         if (line.account?.name === 'Notes Payable') {
@@ -187,12 +219,25 @@ export default function FinanceInstruments() {
             });
           }
         }
+        // Interest paid entries: debit to Interest Expense or Interest Payable
+        if ((line.account?.name === 'Interest Expense' || line.account?.name === 'Interest Payable') && line.debit && line.debit > 0) {
+          interestPaid.push({
+            id: line.transaction?.id || '',
+            date: line.transaction?.date || '',
+            amount: line.debit,
+            memo: line.transaction?.memo || null,
+          });
+        }
       });
 
       setPrincipalOutstanding(prev => ({ ...prev, [instrumentId]: principal }));
       setFundingHistory(prev => ({ 
         ...prev, 
         [instrumentId]: funding.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+      }));
+      setInterestPaidHistory(prev => ({
+        ...prev,
+        [instrumentId]: interestPaid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       }));
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to load instrument detail');
@@ -246,6 +291,17 @@ export default function FinanceInstruments() {
       cash_account_id: cashAccount?.id || '',
     });
     setFundsInOpen(true);
+  };
+
+  const openInterestPaid = (inst: Instrument) => {
+    setInterestPaidInstrument(inst);
+    // Find Cash account as default
+    const cashAccount = accounts.find(a => a.name === 'Cash' && a.type === 'asset');
+    setInterestPaidForm({
+      ...defaultInterestPaidForm,
+      cash_account_id: cashAccount?.id || '',
+    });
+    setInterestPaidOpen(true);
   };
 
   const handleSave = async () => {
@@ -398,6 +454,90 @@ export default function FinanceInstruments() {
     }
   };
 
+  const handleSaveInterestPaid = async () => {
+    if (!interestPaidInstrument) return;
+
+    // Validation
+    if (!interestPaidForm.date) {
+      notify.error('Validation', 'Date is required');
+      return;
+    }
+    const amount = parseFloat(interestPaidForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      notify.error('Validation', 'Amount must be greater than 0');
+      return;
+    }
+    if (!interestPaidForm.cash_account_id) {
+      notify.error('Validation', 'Cash account is required');
+      return;
+    }
+
+    // Find the debit account based on posting mode
+    const debitAccountName = interestPaidForm.posting_mode === 'expense' ? 'Interest Expense' : 'Interest Payable';
+    const debitAccountType = interestPaidForm.posting_mode === 'expense' ? 'expense' : 'liability';
+    const debitAccount = accounts.find(a => a.name === debitAccountName && a.type === debitAccountType);
+    if (!debitAccount) {
+      notify.error('Error', `${debitAccountName} account not found. Please create it first.`);
+      return;
+    }
+
+    setSavingInterestPaid(true);
+    try {
+      // Create transaction
+      const { data: txn, error: txnError } = await supabase
+        .from('fin_transactions')
+        .insert({
+          entity_id: interestPaidInstrument.entity_id,
+          date: interestPaidForm.date,
+          type: 'interest_paid',
+          memo: interestPaidForm.memo || `Interest paid for ${interestPaidInstrument.name}`,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (txnError) throw txnError;
+
+      // Create transaction lines (double-entry)
+      // Debit: Interest Expense or Interest Payable
+      // Credit: Cash
+      const { error: linesError } = await supabase
+        .from('fin_transaction_lines')
+        .insert([
+          {
+            transaction_id: txn.id,
+            account_id: debitAccount.id,
+            debit: amount,
+            credit: null,
+            instrument_id: interestPaidInstrument.id,
+            counterparty_id: interestPaidInstrument.counterparty_id,
+          },
+          {
+            transaction_id: txn.id,
+            account_id: interestPaidForm.cash_account_id,
+            debit: null,
+            credit: amount,
+            instrument_id: interestPaidInstrument.id,
+            counterparty_id: interestPaidInstrument.counterparty_id,
+          },
+        ]);
+
+      if (linesError) throw linesError;
+
+      notify.success('Success', 'Interest payment recorded successfully');
+      setInterestPaidOpen(false);
+      
+      // Reload instrument detail if expanded
+      if (expandedId === interestPaidInstrument.id) {
+        loadInstrumentDetail(interestPaidInstrument.id);
+      }
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to record interest payment');
+    } finally {
+      setSavingInterestPaid(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this instrument?')) return;
     
@@ -524,10 +664,16 @@ export default function FinanceInstruments() {
                       <Badge variant={statusColor(inst.status)}>{inst.status}</Badge>
                       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         {inst.position === 'payable' && (
-                          <Button variant="outline" size="sm" onClick={() => openFundsIn(inst)}>
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            Record Funds In
-                          </Button>
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => openFundsIn(inst)}>
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Record Funds In
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => openInterestPaid(inst)}>
+                              <Banknote className="h-4 w-4 mr-1" />
+                              Record Interest Paid
+                            </Button>
+                          </>
                         )}
                         <Button variant="ghost" size="icon" onClick={() => openEdit(inst)}>
                           <Pencil className="h-4 w-4" />
@@ -583,6 +729,35 @@ export default function FinanceInstruments() {
                                     <TableRow key={entry.id}>
                                       <TableCell>{entry.date}</TableCell>
                                       <TableCell>{entry.counterparty_name}</TableCell>
+                                      <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
+                                      <TableCell className="text-muted-foreground">{entry.memo || '—'}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </div>
+
+                          {/* Interest Paid History Table */}
+                          <div>
+                            <h4 className="font-medium mb-2">Interest Paid History</h4>
+                            {(interestPaidHistory[inst.id] || []).length === 0 ? (
+                              <div className="text-sm text-muted-foreground py-2">
+                                No interest payments recorded yet. Use "Record Interest Paid" to add entries.
+                              </div>
+                            ) : (
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Memo</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {(interestPaidHistory[inst.id] || []).map((entry) => (
+                                    <TableRow key={entry.id}>
+                                      <TableCell>{entry.date}</TableCell>
                                       <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
                                       <TableCell className="text-muted-foreground">{entry.memo || '—'}</TableCell>
                                     </TableRow>
@@ -853,6 +1028,106 @@ export default function FinanceInstruments() {
             <Button variant="outline" onClick={() => setFundsInOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveFundsIn} disabled={savingFundsIn}>
               {savingFundsIn ? 'Recording...' : 'Record Funds'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Interest Paid Dialog */}
+      <Dialog open={interestPaidOpen} onOpenChange={setInterestPaidOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Interest Paid</DialogTitle>
+          </DialogHeader>
+          {interestPaidInstrument && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-muted-foreground">
+                Recording interest payment for <span className="font-medium text-foreground">{interestPaidInstrument.name}</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interest-date">Date *</Label>
+                <Input
+                  id="interest-date"
+                  type="date"
+                  value={interestPaidForm.date}
+                  onChange={(e) => setInterestPaidForm({ ...interestPaidForm, date: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interest-amount">Amount *</Label>
+                <Input
+                  id="interest-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={interestPaidForm.amount}
+                  onChange={(e) => setInterestPaidForm({ ...interestPaidForm, amount: e.target.value })}
+                  placeholder="Enter interest amount paid"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interest-cash-account">Cash Account *</Label>
+                <Select value={interestPaidForm.cash_account_id} onValueChange={(v) => setInterestPaidForm({ ...interestPaidForm, cash_account_id: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cash account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assetAccounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Posting Mode *</Label>
+                <RadioGroup 
+                  value={interestPaidForm.posting_mode} 
+                  onValueChange={(v: 'expense' | 'payable') => setInterestPaidForm({ ...interestPaidForm, posting_mode: v })}
+                  className="flex gap-4"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="expense" id="posting-expense" />
+                    <Label htmlFor="posting-expense" className="font-normal cursor-pointer">
+                      Expense
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="payable" id="posting-payable" />
+                    <Label htmlFor="posting-payable" className="font-normal cursor-pointer">
+                      Payable (when accruals exist)
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interest-memo">Memo</Label>
+                <Textarea
+                  id="interest-memo"
+                  value={interestPaidForm.memo}
+                  onChange={(e) => setInterestPaidForm({ ...interestPaidForm, memo: e.target.value })}
+                  placeholder="Optional note about this interest payment"
+                  rows={2}
+                />
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="font-medium mb-1">Double-Entry Preview:</div>
+                <div className="text-muted-foreground space-y-1">
+                  <div>• Debit: {interestPaidForm.posting_mode === 'expense' ? 'Interest Expense' : 'Interest Payable'}</div>
+                  <div>• Credit: {assetAccounts.find(a => a.id === interestPaidForm.cash_account_id)?.name || 'Cash'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInterestPaidOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveInterestPaid} disabled={savingInterestPaid}>
+              {savingInterestPaid ? 'Recording...' : 'Record Interest Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>
