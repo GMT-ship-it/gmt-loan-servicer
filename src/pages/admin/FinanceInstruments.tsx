@@ -27,6 +27,7 @@ type Instrument = {
   start_date: string;
   maturity_date: string | null;
   status: string;
+  position: string;
   entity?: Entity;
   counterparty?: Counterparty;
 };
@@ -43,6 +44,7 @@ type InstrumentForm = {
   start_date: string;
   maturity_date: string;
   status: string;
+  position: string;
 };
 
 const defaultForm: InstrumentForm = {
@@ -57,12 +59,14 @@ const defaultForm: InstrumentForm = {
   start_date: new Date().toISOString().split('T')[0],
   maturity_date: '',
   status: 'active',
+  position: 'receivable',
 };
 
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
 const dayCountOptions = ['actual_365', 'actual_360', '30_360'];
 const interestMethods = ['simple_daily', 'compound_daily', 'simple_monthly'];
 const statusOptions = ['active', 'paid_off', 'defaulted', 'cancelled'];
+const positionOptions = ['receivable', 'payable'];
 
 export default function FinanceInstruments() {
   const notify = useNotify();
@@ -128,6 +132,7 @@ export default function FinanceInstruments() {
       start_date: inst.start_date,
       maturity_date: inst.maturity_date || '',
       status: inst.status,
+      position: inst.position,
     });
     setDialogOpen(true);
   };
@@ -175,6 +180,7 @@ export default function FinanceInstruments() {
         start_date: form.start_date,
         maturity_date: form.maturity_date || null,
         status: form.status,
+        position: form.position,
       };
 
       if (editingId) {
@@ -389,6 +395,22 @@ export default function FinanceInstruments() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="position">Position</Label>
+                <Select value={form.position} onValueChange={(v) => setForm({ ...form, position: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {positionOptions.map((p) => (
+                      <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
