@@ -425,7 +425,7 @@ export default function FinanceInstruments() {
           if (line.account?.name === 'Notes Receivable') {
             principal += (line.debit || 0) - (line.credit || 0);
             // Each debit to Notes Receivable from funds_used is a disbursement
-            if (line.debit && line.debit > 0 && line.transaction?.type === 'funds_used') {
+            if (line.debit && line.debit > 0 && line.transaction?.type === 'disbursement') {
               fundsUsed.push({
                 id: line.transaction?.id || '',
                 date: line.transaction?.date || '',
@@ -907,7 +907,7 @@ export default function FinanceInstruments() {
         .insert({
           entity_id: fundsUsedInstrument.entity_id,
           date: fundsUsedForm.date,
-          type: 'funds_used',
+          type: 'disbursement',
           memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
           source: 'manual',
         })
