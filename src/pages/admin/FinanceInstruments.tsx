@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
 import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle } from 'lucide-react';
+import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
 import { Link } from 'react-router-dom';
 
 type Entity = { id: string; name: string };
@@ -156,6 +157,15 @@ export default function FinanceInstruments() {
   
   // Instrument positions (loaded for all instruments)
   const [instrumentPositions, setInstrumentPositions] = useState<Record<string, { principal: number; accrued: number; asOfDate: string | null }>>({});
+
+  // Accrued Interest drill-down modal state
+  const [accruedInterestModalOpen, setAccruedInterestModalOpen] = useState(false);
+  const [accruedInterestInstrument, setAccruedInterestInstrument] = useState<Instrument | null>(null);
+
+  const openAccruedInterestModal = (inst: Instrument) => {
+    setAccruedInterestInstrument(inst);
+    setAccruedInterestModalOpen(true);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -818,7 +828,13 @@ export default function FinanceInstruments() {
                                 {fmtMoney(principalOutstanding[inst.id] || 0)}
                               </div>
                             </div>
-                            <div className="bg-background rounded-lg p-3 border">
+                            <div 
+                              className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openAccruedInterestModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openAccruedInterestModal(inst)}
+                            >
                               <div className="text-sm text-muted-foreground">
                                 Accrued Interest
                                 {latestAccrualDate[inst.id] && (
@@ -828,6 +844,7 @@ export default function FinanceInstruments() {
                               <div className="text-xl font-bold">
                                 {fmtMoney(accruedInterest[inst.id] || 0)}
                               </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
                             </div>
                             <div className="bg-background rounded-lg p-3 border col-span-2 md:col-span-2">
                               <div className="text-sm text-muted-foreground">Payoff Balance</div>
@@ -1262,6 +1279,17 @@ export default function FinanceInstruments() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Accrued Interest Drill-Down Modal */}
+      {accruedInterestInstrument && (
+        <AccruedInterestModal
+          open={accruedInterestModalOpen}
+          onOpenChange={setAccruedInterestModalOpen}
+          instrumentId={accruedInterestInstrument.id}
+          instrumentName={accruedInterestInstrument.name}
+          instrumentStartDate={accruedInterestInstrument.start_date}
+        />
+      )}
     </div>
   );
 }
