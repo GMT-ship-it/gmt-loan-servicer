@@ -19,6 +19,9 @@ import Borrower from "./pages/Borrower";
 import BorrowerLoanDetail from "./pages/portal/LoanDetail";
 import PortfolioDashboard from "./pages/admin/PortfolioDashboard";
 import Reports from "./pages/admin/Reports";
+import FinanceInstruments from "./pages/admin/FinanceInstruments";
+import FinanceEntities from "./pages/admin/FinanceEntities";
+import FinanceCounterparties from "./pages/admin/FinanceCounterparties";
 import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
@@ -92,6 +95,27 @@ const App = () => (
               <ErrorBoundary>
                 <Guard need={["admin", "analyst"]}>
                   <Analytics />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/finance/instruments" element={
+              <ErrorBoundary>
+                <Guard need={["admin"]}>
+                  <FinanceInstruments />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/finance/entities" element={
+              <ErrorBoundary>
+                <Guard need={["admin"]}>
+                  <FinanceEntities />
+                </Guard>
+              </ErrorBoundary>
+            } />
+            <Route path="/admin/finance/counterparties" element={
+              <ErrorBoundary>
+                <Guard need={["admin"]}>
+                  <FinanceCounterparties />
                 </Guard>
               </ErrorBoundary>
             } />
