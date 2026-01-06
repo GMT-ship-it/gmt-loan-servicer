@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
-import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
 import PrincipalDetailsModal from '@/components/admin/PrincipalDetailsModal';
 import PayoffDetailsModal from '@/components/admin/PayoffDetailsModal';
@@ -90,6 +91,21 @@ type PrincipalPaymentForm = {
   cash_account_id: string;
 };
 
+type FundsUsedForm = {
+  date: string;
+  amount: string;
+  memo: string;
+  cash_account_id: string;
+};
+
+type PaymentReceivedForm = {
+  date: string;
+  amount: string;
+  memo: string;
+  cash_account_id: string;
+  run_accrual: boolean;
+};
+
 const defaultForm: InstrumentForm = {
   name: '',
   entity_id: '',
@@ -125,6 +141,21 @@ const defaultPrincipalPaymentForm: PrincipalPaymentForm = {
   amount: '',
   memo: '',
   cash_account_id: '',
+};
+
+const defaultFundsUsedForm: FundsUsedForm = {
+  date: new Date().toISOString().split('T')[0],
+  amount: '',
+  memo: '',
+  cash_account_id: '',
+};
+
+const defaultPaymentReceivedForm: PaymentReceivedForm = {
+  date: new Date().toISOString().split('T')[0],
+  amount: '',
+  memo: '',
+  cash_account_id: '',
+  run_accrual: true,
 };
 
 const instrumentTypes = ['loan', 'line_of_credit', 'note_payable', 'bond'];
@@ -217,6 +248,42 @@ export default function FinanceInstruments() {
     setPayoffModalOpen(true);
   };
 
+  // Receivable-side: Funds Used modal state
+  const [fundsUsedOpen, setFundsUsedOpen] = useState(false);
+  const [fundsUsedInstrument, setFundsUsedInstrument] = useState<Instrument | null>(null);
+  const [fundsUsedForm, setFundsUsedForm] = useState<FundsUsedForm>(defaultFundsUsedForm);
+  const [savingFundsUsed, setSavingFundsUsed] = useState(false);
+
+  const openFundsUsed = (inst: Instrument) => {
+    setFundsUsedInstrument(inst);
+    const cashAccount = accounts.find(a => a.name === 'Cash' && a.type === 'asset');
+    setFundsUsedForm({
+      ...defaultFundsUsedForm,
+      cash_account_id: cashAccount?.id || '',
+    });
+    setFundsUsedOpen(true);
+  };
+
+  // Receivable-side: Payment Received modal state
+  const [paymentReceivedOpen, setPaymentReceivedOpen] = useState(false);
+  const [paymentReceivedInstrument, setPaymentReceivedInstrument] = useState<Instrument | null>(null);
+  const [paymentReceivedForm, setPaymentReceivedForm] = useState<PaymentReceivedForm>(defaultPaymentReceivedForm);
+  const [savingPaymentReceived, setSavingPaymentReceived] = useState(false);
+
+  const openPaymentReceived = (inst: Instrument) => {
+    setPaymentReceivedInstrument(inst);
+    const cashAccount = accounts.find(a => a.name === 'Cash' && a.type === 'asset');
+    setPaymentReceivedForm({
+      ...defaultPaymentReceivedForm,
+      cash_account_id: cashAccount?.id || '',
+    });
+    setPaymentReceivedOpen(true);
+  };
+
+  // Receivable history state
+  const [fundsUsedHistory, setFundsUsedHistory] = useState<Record<string, FundingEntry[]>>({});
+  const [paymentsReceivedHistory, setPaymentsReceivedHistory] = useState<Record<string, InterestPaidEntry[]>>({});
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -268,7 +335,7 @@ export default function FinanceInstruments() {
     loadData();
   }, []);
 
-  const loadInstrumentDetail = async (instrumentId: string) => {
+  const loadInstrumentDetail = async (instrumentId: string, position: string) => {
     setLoadingDetail(instrumentId);
     try {
       // Get all transaction lines for this instrument
@@ -296,55 +363,124 @@ export default function FinanceInstruments() {
       if (linesRes.error) throw linesRes.error;
       const lines = linesRes.data || [];
 
-      // Calculate principal outstanding (credits - debits on Notes Payable)
-      let principal = 0;
-      const funding: FundingEntry[] = [];
-      const interestPaid: InterestPaidEntry[] = [];
-      const seenTxIds = new Set<string>();
+      if (position === 'payable') {
+        // Calculate principal outstanding (credits - debits on Notes Payable)
+        let principal = 0;
+        const funding: FundingEntry[] = [];
+        const interestPaid: InterestPaidEntry[] = [];
+        const seenTxIds = new Set<string>();
 
-      lines.forEach((line: any) => {
-        if (line.account?.name === 'Notes Payable') {
-          principal += (line.credit || 0) - (line.debit || 0);
-          // Each credit to Notes Payable is a funding entry
-          if (line.credit && line.credit > 0) {
-            funding.push({
-              id: line.transaction?.id || '',
-              date: line.transaction?.date || '',
-              amount: line.credit,
-              memo: line.transaction?.memo || null,
-              counterparty_name: line.counterparty?.name || '—',
-            });
+        lines.forEach((line: any) => {
+          if (line.account?.name === 'Notes Payable') {
+            principal += (line.credit || 0) - (line.debit || 0);
+            // Each credit to Notes Payable is a funding entry
+            if (line.credit && line.credit > 0) {
+              funding.push({
+                id: line.transaction?.id || '',
+                date: line.transaction?.date || '',
+                amount: line.credit,
+                memo: line.transaction?.memo || null,
+                counterparty_name: line.counterparty?.name || '—',
+              });
+            }
           }
-        }
-        // Interest paid entries: debit to Interest Expense or Interest Payable (exclude accruals)
-        if (
-          (line.account?.name === 'Interest Expense' || line.account?.name === 'Interest Payable') && 
-          line.debit && 
-          line.debit > 0 &&
-          line.transaction?.type !== 'accrual'
-        ) {
-          // Dedupe by transaction id
-          if (!seenTxIds.has(line.transaction?.id)) {
+          // Interest paid entries: debit to Interest Expense or Interest Payable (exclude accruals)
+          if (
+            (line.account?.name === 'Interest Expense' || line.account?.name === 'Interest Payable') && 
+            line.debit && 
+            line.debit > 0 &&
+            line.transaction?.type !== 'accrual'
+          ) {
+            // Dedupe by transaction id
+            if (!seenTxIds.has(line.transaction?.id)) {
+              seenTxIds.add(line.transaction?.id);
+              interestPaid.push({
+                id: line.transaction?.id || '',
+                date: line.transaction?.date || '',
+                amount: line.debit,
+                memo: line.transaction?.memo || null,
+              });
+            }
+          }
+        });
+
+        setPrincipalOutstanding(prev => ({ ...prev, [instrumentId]: principal }));
+        setFundingHistory(prev => ({ 
+          ...prev, 
+          [instrumentId]: funding.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+        }));
+        setInterestPaidHistory(prev => ({
+          ...prev,
+          [instrumentId]: interestPaid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        }));
+      } else {
+        // Receivable position
+        // Calculate principal outstanding (debits - credits on Notes Receivable)
+        let principal = 0;
+        const fundsUsed: FundingEntry[] = [];
+        const paymentsReceived: InterestPaidEntry[] = [];
+        const seenTxIds = new Set<string>();
+
+        lines.forEach((line: any) => {
+          if (line.account?.name === 'Notes Receivable') {
+            principal += (line.debit || 0) - (line.credit || 0);
+            // Each debit to Notes Receivable from funds_used is a disbursement
+            if (line.debit && line.debit > 0 && line.transaction?.type === 'funds_used') {
+              fundsUsed.push({
+                id: line.transaction?.id || '',
+                date: line.transaction?.date || '',
+                amount: line.debit,
+                memo: line.transaction?.memo || null,
+                counterparty_name: line.counterparty?.name || '—',
+              });
+            }
+          }
+          // Payments received: credit to Notes Receivable or Interest Receivable from payment_received
+          if (
+            line.transaction?.type === 'payment_received' &&
+            !seenTxIds.has(line.transaction?.id)
+          ) {
             seenTxIds.add(line.transaction?.id);
-            interestPaid.push({
-              id: line.transaction?.id || '',
-              date: line.transaction?.date || '',
-              amount: line.debit,
-              memo: line.transaction?.memo || null,
-            });
+            // Get total amount from Cash debit line
+            const cashAmount = line.account?.name === 'Cash' ? (line.debit || 0) : 0;
+            if (cashAmount > 0) {
+              paymentsReceived.push({
+                id: line.transaction?.id || '',
+                date: line.transaction?.date || '',
+                amount: cashAmount,
+                memo: line.transaction?.memo || null,
+              });
+            }
           }
-        }
-      });
+        });
 
-      setPrincipalOutstanding(prev => ({ ...prev, [instrumentId]: principal }));
-      setFundingHistory(prev => ({ 
-        ...prev, 
-        [instrumentId]: funding.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
-      }));
-      setInterestPaidHistory(prev => ({
-        ...prev,
-        [instrumentId]: interestPaid.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      }));
+        // Re-scan for payment amounts from Cash account
+        const paymentAmounts: Record<string, number> = {};
+        lines.forEach((line: any) => {
+          if (line.transaction?.type === 'payment_received' && line.account?.name === 'Cash' && line.debit) {
+            paymentAmounts[line.transaction.id] = line.debit;
+          }
+        });
+        const uniquePayments = Object.entries(paymentAmounts).map(([txId, amount]) => {
+          const txLine = lines.find((l: any) => l.transaction?.id === txId);
+          return {
+            id: txId,
+            date: txLine?.transaction?.date || '',
+            amount,
+            memo: txLine?.transaction?.memo || null,
+          };
+        });
+
+        setPrincipalOutstanding(prev => ({ ...prev, [instrumentId]: principal }));
+        setFundsUsedHistory(prev => ({ 
+          ...prev, 
+          [instrumentId]: fundsUsed.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) 
+        }));
+        setPaymentsReceivedHistory(prev => ({
+          ...prev,
+          [instrumentId]: uniquePayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        }));
+      }
       
       // Set accrued interest from daily positions
       if (positionsRes.data) {
@@ -366,9 +502,7 @@ export default function FinanceInstruments() {
       setExpandedId(null);
     } else {
       setExpandedId(inst.id);
-      if (inst.position === 'payable') {
-        loadInstrumentDetail(inst.id);
-      }
+      loadInstrumentDetail(inst.id, inst.position);
     }
   };
 
@@ -560,7 +694,7 @@ export default function FinanceInstruments() {
       
       // Reload instrument detail if expanded
       if (expandedId === fundsInInstrument.id) {
-        loadInstrumentDetail(fundsInInstrument.id);
+        loadInstrumentDetail(fundsInInstrument.id, fundsInInstrument.position);
       }
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to record funds');
@@ -644,7 +778,7 @@ export default function FinanceInstruments() {
       
       // Reload instrument detail if expanded
       if (expandedId === interestPaidInstrument.id) {
-        loadInstrumentDetail(interestPaidInstrument.id);
+        loadInstrumentDetail(interestPaidInstrument.id, interestPaidInstrument.position);
       }
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to record interest payment');
@@ -729,12 +863,238 @@ export default function FinanceInstruments() {
       
       // Reload instrument detail if expanded
       if (expandedId === principalPaymentInstrument.id) {
-        loadInstrumentDetail(principalPaymentInstrument.id);
+        loadInstrumentDetail(principalPaymentInstrument.id, principalPaymentInstrument.position);
       }
     } catch (err: any) {
       notify.error('Error', err.message || 'Failed to record principal payment');
     } finally {
       setSavingPrincipalPayment(false);
+    }
+  };
+
+  // ===== Receivable-side handlers =====
+  
+  const handleSaveFundsUsed = async () => {
+    if (!fundsUsedInstrument) return;
+
+    // Validation
+    if (!fundsUsedForm.date) {
+      notify.error('Validation', 'Date is required');
+      return;
+    }
+    const amount = parseFloat(fundsUsedForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      notify.error('Validation', 'Amount must be greater than 0');
+      return;
+    }
+    if (!fundsUsedForm.cash_account_id) {
+      notify.error('Validation', 'Cash account is required');
+      return;
+    }
+
+    // Find Notes Receivable account
+    const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
+    if (!notesReceivableAccount) {
+      notify.error('Error', 'Notes Receivable account not found. Please create it first.');
+      return;
+    }
+
+    setSavingFundsUsed(true);
+    try {
+      // Create transaction
+      const { data: txn, error: txnError } = await supabase
+        .from('fin_transactions')
+        .insert({
+          entity_id: fundsUsedInstrument.entity_id,
+          date: fundsUsedForm.date,
+          type: 'funds_used',
+          memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (txnError) throw txnError;
+
+      // Create transaction lines (double-entry)
+      // Dr Notes Receivable = amount (increase asset)
+      // Cr Cash = amount (decrease asset)
+      const { error: linesError } = await supabase
+        .from('fin_transaction_lines')
+        .insert([
+          {
+            transaction_id: txn.id,
+            account_id: notesReceivableAccount.id,
+            debit: amount,
+            credit: null,
+            instrument_id: fundsUsedInstrument.id,
+            counterparty_id: fundsUsedInstrument.counterparty_id,
+          },
+          {
+            transaction_id: txn.id,
+            account_id: fundsUsedForm.cash_account_id,
+            debit: null,
+            credit: amount,
+            instrument_id: fundsUsedInstrument.id,
+            counterparty_id: fundsUsedInstrument.counterparty_id,
+          },
+        ]);
+
+      if (linesError) throw linesError;
+
+      notify.success('Success', 'Funds disbursement recorded successfully');
+      setFundsUsedOpen(false);
+      
+      // Reload data to update positions
+      await loadData();
+      
+      // Reload instrument detail if expanded
+      if (expandedId === fundsUsedInstrument.id) {
+        loadInstrumentDetail(fundsUsedInstrument.id, fundsUsedInstrument.position);
+      }
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to record funds');
+    } finally {
+      setSavingFundsUsed(false);
+    }
+  };
+
+  const handleSavePaymentReceived = async () => {
+    if (!paymentReceivedInstrument) return;
+
+    // Validation
+    if (!paymentReceivedForm.date) {
+      notify.error('Validation', 'Date is required');
+      return;
+    }
+    const amount = parseFloat(paymentReceivedForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      notify.error('Validation', 'Amount must be greater than 0');
+      return;
+    }
+    if (!paymentReceivedForm.cash_account_id) {
+      notify.error('Validation', 'Cash account is required');
+      return;
+    }
+
+    // Find required accounts
+    const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
+    const interestReceivableAccount = accounts.find(a => a.name === 'Interest Receivable' && a.type === 'asset');
+    
+    if (!notesReceivableAccount) {
+      notify.error('Error', 'Notes Receivable account not found. Please create it first.');
+      return;
+    }
+    if (!interestReceivableAccount) {
+      notify.error('Error', 'Interest Receivable account not found. Please create it first.');
+      return;
+    }
+
+    setSavingPaymentReceived(true);
+    try {
+      // If toggle ON, call accrual catch-up up to payment date
+      if (paymentReceivedForm.run_accrual) {
+        try {
+          await supabase.functions.invoke('accrue-interest', {
+            body: { 
+              run_date: paymentReceivedForm.date, 
+              mode: 'catch_up',
+              target_instrument_id: paymentReceivedInstrument.id,
+            },
+          });
+        } catch (accrualErr) {
+          console.warn('Accrual catch-up failed, continuing with payment:', accrualErr);
+        }
+      }
+
+      // Get accrued interest owed as-of payment date from daily positions
+      const { data: positionData } = await supabase
+        .from('fin_instrument_daily_positions')
+        .select('accrued_interest_balance')
+        .eq('instrument_id', paymentReceivedInstrument.id)
+        .lte('as_of_date', paymentReceivedForm.date)
+        .order('as_of_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const accruedInterestOwed = positionData?.accrued_interest_balance || 0;
+
+      // Allocate payment: interest first, then principal
+      const interestPaid = Math.min(amount, accruedInterestOwed);
+      const principalPaid = amount - interestPaid;
+
+      // Create transaction
+      const { data: txn, error: txnError } = await supabase
+        .from('fin_transactions')
+        .insert({
+          entity_id: paymentReceivedInstrument.entity_id,
+          date: paymentReceivedForm.date,
+          type: 'payment_received',
+          memo: paymentReceivedForm.memo || `Payment received for ${paymentReceivedInstrument.name}${interestPaid > 0 ? ` (Interest: ${fmtMoney(interestPaid)}, Principal: ${fmtMoney(principalPaid)})` : ''}`,
+          source: 'manual',
+        })
+        .select()
+        .single();
+
+      if (txnError) throw txnError;
+
+      // Create transaction lines (double-entry)
+      // Dr Cash = amount
+      // Cr Interest Receivable = interestPaid (if > 0)
+      // Cr Notes Receivable = principalPaid (if > 0)
+      const lines: any[] = [
+        {
+          transaction_id: txn.id,
+          account_id: paymentReceivedForm.cash_account_id,
+          debit: amount,
+          credit: null,
+          instrument_id: paymentReceivedInstrument.id,
+          counterparty_id: paymentReceivedInstrument.counterparty_id,
+        },
+      ];
+
+      if (interestPaid > 0) {
+        lines.push({
+          transaction_id: txn.id,
+          account_id: interestReceivableAccount.id,
+          debit: null,
+          credit: interestPaid,
+          instrument_id: paymentReceivedInstrument.id,
+          counterparty_id: paymentReceivedInstrument.counterparty_id,
+        });
+      }
+
+      if (principalPaid > 0) {
+        lines.push({
+          transaction_id: txn.id,
+          account_id: notesReceivableAccount.id,
+          debit: null,
+          credit: principalPaid,
+          instrument_id: paymentReceivedInstrument.id,
+          counterparty_id: paymentReceivedInstrument.counterparty_id,
+        });
+      }
+
+      const { error: linesError } = await supabase
+        .from('fin_transaction_lines')
+        .insert(lines);
+
+      if (linesError) throw linesError;
+
+      notify.success('Success', `Payment recorded: ${fmtMoney(interestPaid)} to interest, ${fmtMoney(principalPaid)} to principal`);
+      setPaymentReceivedOpen(false);
+      
+      // Reload data to update positions
+      await loadData();
+      
+      // Reload instrument detail if expanded
+      if (expandedId === paymentReceivedInstrument.id) {
+        loadInstrumentDetail(paymentReceivedInstrument.id, paymentReceivedInstrument.position);
+      }
+    } catch (err: any) {
+      notify.error('Error', err.message || 'Failed to record payment');
+    } finally {
+      setSavingPaymentReceived(false);
     }
   };
 
@@ -868,14 +1228,10 @@ export default function FinanceInstruments() {
                     onClick={() => toggleExpand(inst)}
                   >
                     <div className="flex items-center gap-4">
-                      {inst.position === 'payable' ? (
-                        expandedId === inst.id ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )
+                      {expandedId === inst.id ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       ) : (
-                        <div className="w-4" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                       <div>
                         <div className="font-medium flex items-center gap-2">
@@ -924,7 +1280,7 @@ export default function FinanceInstruments() {
                         {inst.position === 'payable' && (
                           <>
                             <Button variant="outline" size="sm" onClick={() => openFundsIn(inst)}>
-                              <DollarSign className="h-4 w-4 mr-1" />
+                              <ArrowDownToLine className="h-4 w-4 mr-1" />
                               Record Funds In
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => openPrincipalPayment(inst)}>
@@ -934,6 +1290,18 @@ export default function FinanceInstruments() {
                             <Button variant="outline" size="sm" onClick={() => openInterestPaid(inst)}>
                               <Banknote className="h-4 w-4 mr-1" />
                               Record Interest Paid
+                            </Button>
+                          </>
+                        )}
+                        {inst.position === 'receivable' && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => openFundsUsed(inst)}>
+                              <ArrowUpFromLine className="h-4 w-4 mr-1" />
+                              Record Funds Used
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => openPaymentReceived(inst)}>
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Record Payment Received
                             </Button>
                           </>
                         )}
@@ -1056,6 +1424,125 @@ export default function FinanceInstruments() {
                                 </TableHeader>
                                 <TableBody>
                                   {(interestPaidHistory[inst.id] || []).map((entry) => (
+                                    <TableRow key={entry.id}>
+                                      <TableCell>{entry.date}</TableCell>
+                                      <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
+                                      <TableCell className="text-muted-foreground">{entry.memo || '—'}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Expanded Detail for Receivable Instruments */}
+                  {expandedId === inst.id && inst.position === 'receivable' && (
+                    <div className="border-t p-4 bg-muted/30 space-y-4">
+                      {loadingDetail === inst.id ? (
+                        <div className="text-center py-4 text-muted-foreground">Loading details...</div>
+                      ) : (
+                        <>
+                          {/* Balance Summary */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div 
+                              className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openPrincipalModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openPrincipalModal(inst)}
+                            >
+                              <div className="text-sm text-muted-foreground">Principal Outstanding</div>
+                              <div className="text-xl font-bold">
+                                {fmtMoney(principalOutstanding[inst.id] || 0)}
+                              </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
+                            </div>
+                            <div 
+                              className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openAccruedInterestModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openAccruedInterestModal(inst)}
+                            >
+                              <div className="text-sm text-muted-foreground">
+                                Accrued Interest
+                                {latestAccrualDate[inst.id] && (
+                                  <span className="text-xs ml-1">(as of {latestAccrualDate[inst.id]})</span>
+                                )}
+                              </div>
+                              <div className="text-xl font-bold">
+                                {fmtMoney(accruedInterest[inst.id] || 0)}
+                              </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
+                            </div>
+                            <div 
+                              className="bg-background rounded-lg p-3 border cursor-pointer hover:border-primary/50 hover:shadow-sm transition-all"
+                              onClick={() => openPayoffModal(inst)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => e.key === 'Enter' && openPayoffModal(inst)}
+                            >
+                              <div className="text-sm text-muted-foreground">Payoff Balance</div>
+                              <div className="text-2xl font-bold text-primary">
+                                {fmtMoney((principalOutstanding[inst.id] || 0) + (accruedInterest[inst.id] || 0))}
+                              </div>
+                              <div className="text-xs text-primary mt-1">Click for details →</div>
+                            </div>
+                          </div>
+
+                          {/* Funds Used History Table */}
+                          <div>
+                            <h4 className="font-medium mb-2">Funds Used History</h4>
+                            {(fundsUsedHistory[inst.id] || []).length === 0 ? (
+                              <div className="text-sm text-muted-foreground py-2">
+                                No disbursements recorded yet. Use "Record Funds Used" to add entries.
+                              </div>
+                            ) : (
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Borrower/Counterparty</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Memo</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {(fundsUsedHistory[inst.id] || []).map((entry) => (
+                                    <TableRow key={entry.id}>
+                                      <TableCell>{entry.date}</TableCell>
+                                      <TableCell>{entry.counterparty_name}</TableCell>
+                                      <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
+                                      <TableCell className="text-muted-foreground">{entry.memo || '—'}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </div>
+
+                          {/* Payments Received History Table */}
+                          <div>
+                            <h4 className="font-medium mb-2">Payments Received History</h4>
+                            {(paymentsReceivedHistory[inst.id] || []).length === 0 ? (
+                              <div className="text-sm text-muted-foreground py-2">
+                                No payments received yet. Use "Record Payment Received" to add entries.
+                              </div>
+                            ) : (
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Memo</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {(paymentsReceivedHistory[inst.id] || []).map((entry) => (
                                     <TableRow key={entry.id}>
                                       <TableCell>{entry.date}</TableCell>
                                       <TableCell className="text-right font-medium">{fmtMoney(entry.amount)}</TableCell>
@@ -1507,6 +1994,99 @@ export default function FinanceInstruments() {
             <Button onClick={handleSavePrincipalPayment} disabled={savingPrincipalPayment}>
               {savingPrincipalPayment ? 'Recording...' : 'Record Principal Payment'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Funds Used Dialog (Receivable) */}
+      <Dialog open={fundsUsedOpen} onOpenChange={setFundsUsedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Funds Used</DialogTitle>
+          </DialogHeader>
+          {fundsUsedInstrument && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-muted-foreground">
+                Recording funds disbursed for <span className="font-medium text-foreground">{fundsUsedInstrument.name}</span>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fundsused-date">Date *</Label>
+                <Input id="fundsused-date" type="date" value={fundsUsedForm.date} onChange={(e) => setFundsUsedForm({ ...fundsUsedForm, date: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fundsused-amount">Amount *</Label>
+                <Input id="fundsused-amount" type="number" min="0.01" step="0.01" value={fundsUsedForm.amount} onChange={(e) => setFundsUsedForm({ ...fundsUsedForm, amount: e.target.value })} placeholder="Enter amount disbursed" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fundsused-cash-account">Cash Account *</Label>
+                <Select value={fundsUsedForm.cash_account_id} onValueChange={(v) => setFundsUsedForm({ ...fundsUsedForm, cash_account_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select cash account" /></SelectTrigger>
+                  <SelectContent>{assetAccounts.map((a) => (<SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fundsused-memo">Memo</Label>
+                <Textarea id="fundsused-memo" value={fundsUsedForm.memo} onChange={(e) => setFundsUsedForm({ ...fundsUsedForm, memo: e.target.value })} placeholder="Optional note" rows={2} />
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="font-medium mb-1">Double-Entry Preview:</div>
+                <div className="text-muted-foreground space-y-1">
+                  <div>• Debit: Notes Receivable</div>
+                  <div>• Credit: {assetAccounts.find(a => a.id === fundsUsedForm.cash_account_id)?.name || 'Cash'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFundsUsedOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveFundsUsed} disabled={savingFundsUsed}>{savingFundsUsed ? 'Recording...' : 'Record Funds'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Received Dialog (Receivable) */}
+      <Dialog open={paymentReceivedOpen} onOpenChange={setPaymentReceivedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment Received</DialogTitle>
+          </DialogHeader>
+          {paymentReceivedInstrument && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-muted-foreground">
+                Recording payment received for <span className="font-medium text-foreground">{paymentReceivedInstrument.name}</span>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payrcv-date">Date *</Label>
+                <Input id="payrcv-date" type="date" value={paymentReceivedForm.date} onChange={(e) => setPaymentReceivedForm({ ...paymentReceivedForm, date: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payrcv-amount">Amount *</Label>
+                <Input id="payrcv-amount" type="number" min="0.01" step="0.01" value={paymentReceivedForm.amount} onChange={(e) => setPaymentReceivedForm({ ...paymentReceivedForm, amount: e.target.value })} placeholder="Enter payment amount" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payrcv-cash-account">Cash Account *</Label>
+                <Select value={paymentReceivedForm.cash_account_id} onValueChange={(v) => setPaymentReceivedForm({ ...paymentReceivedForm, cash_account_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select cash account" /></SelectTrigger>
+                  <SelectContent>{assetAccounts.map((a) => (<SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>))}</SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="payrcv-accrual" className="text-sm">Run accrual through payment date</Label>
+                <Switch id="payrcv-accrual" checked={paymentReceivedForm.run_accrual} onCheckedChange={(v) => setPaymentReceivedForm({ ...paymentReceivedForm, run_accrual: v })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payrcv-memo">Memo</Label>
+                <Textarea id="payrcv-memo" value={paymentReceivedForm.memo} onChange={(e) => setPaymentReceivedForm({ ...paymentReceivedForm, memo: e.target.value })} placeholder="Optional note" rows={2} />
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                <div className="font-medium mb-1">Allocation:</div>
+                <div className="text-muted-foreground">Payment will be applied first to accrued interest, then to principal.</div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentReceivedOpen(false)}>Cancel</Button>
+            <Button onClick={handleSavePaymentReceived} disabled={savingPaymentReceived}>{savingPaymentReceived ? 'Recording...' : 'Record Payment'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
