@@ -32,3 +32,9 @@ verify_jwt = false
 
 [functions.assign-user-role]
 verify_jwt = false
+
+[functions.accrue-interest]
+verify_jwt = false
+
+[functions.get-pending-user-emails]
+verify_jwt = false
