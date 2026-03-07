@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
 import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { createApprovalRequest, type ApprovalRequestType } from '@/lib/approval-helpers';
 import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
 import PrincipalDetailsModal from '@/components/admin/PrincipalDetailsModal';
 import PayoffDetailsModal from '@/components/admin/PayoffDetailsModal';
