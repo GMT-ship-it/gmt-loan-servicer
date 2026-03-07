@@ -944,7 +944,6 @@ export default function FinanceInstruments() {
   const handleSavePaymentReceived = async () => {
     if (!paymentReceivedInstrument) return;
 
-    // Validation
     if (!paymentReceivedForm.date) {
       notify.error('Validation', 'Date is required');
       return;
@@ -959,37 +958,27 @@ export default function FinanceInstruments() {
       return;
     }
 
-    // Find required accounts
     const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
     const interestReceivableAccount = accounts.find(a => a.name === 'Interest Receivable' && a.type === 'asset');
-    
-    if (!notesReceivableAccount) {
-      notify.error('Error', 'Notes Receivable account not found. Please create it first.');
-      return;
-    }
-    if (!interestReceivableAccount) {
-      notify.error('Error', 'Interest Receivable account not found. Please create it first.');
+    if (!notesReceivableAccount || !interestReceivableAccount) {
+      notify.error('Error', 'Notes Receivable or Interest Receivable account not found.');
       return;
     }
 
     setSavingPaymentReceived(true);
     try {
-      // If toggle ON, call accrual catch-up up to payment date
+      // Optionally run accrual catch-up before computing allocation
       if (paymentReceivedForm.run_accrual) {
         try {
           await supabase.functions.invoke('accrue-interest', {
-            body: { 
-              run_date: paymentReceivedForm.date, 
-              mode: 'catch_up',
-              target_instrument_id: paymentReceivedInstrument.id,
-            },
+            body: { run_date: paymentReceivedForm.date, mode: 'catch_up', target_instrument_id: paymentReceivedInstrument.id },
           });
         } catch (accrualErr) {
-          console.warn('Accrual catch-up failed, continuing with payment:', accrualErr);
+          console.warn('Accrual catch-up failed, continuing:', accrualErr);
         }
       }
 
-      // Get accrued interest owed as-of payment date from daily positions
+      // Determine allocation from daily positions
       const { data: positionData } = await supabase
         .from('fin_instrument_daily_positions')
         .select('accrued_interest_balance')
@@ -1000,70 +989,42 @@ export default function FinanceInstruments() {
         .maybeSingle();
 
       const accruedInterestOwed = positionData?.accrued_interest_balance || 0;
-
-      // Allocate payment: interest first, then principal
       const interestPaid = Math.min(amount, accruedInterestOwed);
       const principalPaid = amount - interestPaid;
 
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: paymentReceivedInstrument.entity_id,
-          date: paymentReceivedForm.date,
-          type: 'payment_received',
-          memo: paymentReceivedForm.memo || `Payment received for ${paymentReceivedInstrument.name}${interestPaid > 0 ? ` (Interest: ${fmtMoney(interestPaid)}, Principal: ${fmtMoney(principalPaid)})` : ''}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Dr Cash = amount
-      // Cr Interest Receivable = interestPaid (if > 0)
-      // Cr Notes Receivable = principalPaid (if > 0)
+      // Build ledger lines
       const lines: any[] = [
-        {
-          transaction_id: txn.id,
-          account_id: paymentReceivedForm.cash_account_id,
-          debit: amount,
-          credit: null,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        },
+        { account_id: paymentReceivedForm.cash_account_id, debit: amount, credit: null, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id },
       ];
-
       if (interestPaid > 0) {
-        lines.push({
-          transaction_id: txn.id,
-          account_id: interestReceivableAccount.id,
-          debit: null,
-          credit: interestPaid,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        });
+        lines.push({ account_id: interestReceivableAccount.id, debit: null, credit: interestPaid, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id });
       }
-
       if (principalPaid > 0) {
-        lines.push({
-          transaction_id: txn.id,
-          account_id: notesReceivableAccount.id,
-          debit: null,
-          credit: principalPaid,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        });
+        lines.push({ account_id: notesReceivableAccount.id, debit: null, credit: principalPaid, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id });
       }
 
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert(lines);
+      const memo = paymentReceivedForm.memo || `Payment received for ${paymentReceivedInstrument.name} (Interest: ${fmtMoney(interestPaid)}, Principal: ${fmtMoney(principalPaid)})`;
 
-      if (linesError) throw linesError;
+      await createApprovalRequest({
+        entity_id: paymentReceivedInstrument.entity_id,
+        request_type: 'payment_received',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: paymentReceivedInstrument.id,
+          interest_paid: interestPaid,
+          principal_paid: principalPaid,
+          transaction: {
+            entity_id: paymentReceivedInstrument.entity_id,
+            date: paymentReceivedForm.date,
+            type: 'payment_received',
+            memo,
+          },
+          lines,
+        },
+      });
 
-      notify.success('Success', `Payment recorded: ${fmtMoney(interestPaid)} to interest, ${fmtMoney(principalPaid)} to principal`);
+      notify.success('Submitted', 'Payment received sent for approval');
       setPaymentReceivedOpen(false);
       
       // Reload data to update positions
