@@ -878,7 +878,6 @@ export default function FinanceInstruments() {
   const handleSaveFundsUsed = async () => {
     if (!fundsUsedInstrument) return;
 
-    // Validation
     if (!fundsUsedForm.date) {
       notify.error('Validation', 'Date is required');
       return;
@@ -893,7 +892,6 @@ export default function FinanceInstruments() {
       return;
     }
 
-    // Find Notes Receivable account
     const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
     if (!notesReceivableAccount) {
       notify.error('Error', 'Notes Receivable account not found. Please create it first.');
@@ -902,59 +900,42 @@ export default function FinanceInstruments() {
 
     setSavingFundsUsed(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: fundsUsedInstrument.entity_id,
-          date: fundsUsedForm.date,
-          type: 'disbursement',
-          memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Dr Notes Receivable = amount (increase asset)
-      // Cr Cash = amount (decrease asset)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: notesReceivableAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: fundsUsedInstrument.id,
-            counterparty_id: fundsUsedInstrument.counterparty_id,
+      await createApprovalRequest({
+        entity_id: fundsUsedInstrument.entity_id,
+        request_type: 'disbursement',
+        amount,
+        reason: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
+        payload: {
+          instrument_id: fundsUsedInstrument.id,
+          transaction: {
+            entity_id: fundsUsedInstrument.entity_id,
+            date: fundsUsedForm.date,
+            type: 'disbursement',
+            memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
           },
-          {
-            transaction_id: txn.id,
-            account_id: fundsUsedForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: fundsUsedInstrument.id,
-            counterparty_id: fundsUsedInstrument.counterparty_id,
-          },
-        ]);
+          lines: [
+            {
+              account_id: notesReceivableAccount.id,
+              debit: amount,
+              credit: null,
+              instrument_id: fundsUsedInstrument.id,
+              counterparty_id: fundsUsedInstrument.counterparty_id,
+            },
+            {
+              account_id: fundsUsedForm.cash_account_id,
+              debit: null,
+              credit: amount,
+              instrument_id: fundsUsedInstrument.id,
+              counterparty_id: fundsUsedInstrument.counterparty_id,
+            },
+          ],
+        },
+      });
 
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Funds disbursement recorded successfully');
+      notify.success('Submitted', 'Disbursement sent for approval');
       setFundsUsedOpen(false);
-      
-      // Reload data to update positions
-      await loadData();
-      
-      // Reload instrument detail if expanded
-      if (expandedId === fundsUsedInstrument.id) {
-        loadInstrumentDetail(fundsUsedInstrument.id, fundsUsedInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record funds');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingFundsUsed(false);
     }
