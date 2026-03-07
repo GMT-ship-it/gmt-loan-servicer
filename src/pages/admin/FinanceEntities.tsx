@@ -113,7 +113,7 @@ export default function FinanceEntities() {
         if (error) throw error;
         notify.success('Success', 'Entity updated');
       } else {
-        const { error } = await supabase.from('gmt_entities').insert(payload);
+        const { error } = await supabase.from('gmt_entities').insert([payload]);
         if (error) throw error;
         notify.success('Success', 'Entity created');
       }
