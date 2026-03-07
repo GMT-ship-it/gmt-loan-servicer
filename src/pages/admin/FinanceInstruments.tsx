@@ -627,78 +627,40 @@ export default function FinanceInstruments() {
   const handleSaveFundsIn = async () => {
     if (!fundsInInstrument) return;
 
-    // Validation
-    if (!fundsInForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!fundsInForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(fundsInForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!fundsInForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!fundsInForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find Notes Payable account
     const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
-    if (!notesPayableAccount) {
-      notify.error('Error', 'Notes Payable account not found. Please create it first.');
-      return;
-    }
+    if (!notesPayableAccount) { notify.error('Error', 'Notes Payable account not found.'); return; }
 
     setSavingFundsIn(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: fundsInInstrument.entity_id,
-          date: fundsInForm.date,
-          type: 'funds_in',
-          memo: fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: fundsInForm.cash_account_id,
-            debit: amount,
-            credit: null,
-            instrument_id: fundsInInstrument.id,
-            counterparty_id: fundsInInstrument.counterparty_id,
+      const memo = fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: fundsInInstrument.entity_id,
+        request_type: 'disbursement',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: fundsInInstrument.id,
+          transaction: {
+            entity_id: fundsInInstrument.entity_id,
+            date: fundsInForm.date,
+            type: 'funds_in',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: notesPayableAccount.id,
-            debit: null,
-            credit: amount,
-            instrument_id: fundsInInstrument.id,
-            counterparty_id: fundsInInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Funds recorded successfully');
+          lines: [
+            { account_id: fundsInForm.cash_account_id, debit: amount, credit: null, instrument_id: fundsInInstrument.id, counterparty_id: fundsInInstrument.counterparty_id },
+            { account_id: notesPayableAccount.id, debit: null, credit: amount, instrument_id: fundsInInstrument.id, counterparty_id: fundsInInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Funds In sent for approval');
       setFundsInOpen(false);
-      
-      // Reload instrument detail if expanded
-      if (expandedId === fundsInInstrument.id) {
-        loadInstrumentDetail(fundsInInstrument.id, fundsInInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record funds');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingFundsIn(false);
     }
