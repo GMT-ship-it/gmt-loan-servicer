@@ -751,83 +751,40 @@ export default function FinanceInstruments() {
   const handleSavePrincipalPayment = async () => {
     if (!principalPaymentInstrument) return;
 
-    // Validation
-    if (!principalPaymentForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!principalPaymentForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(principalPaymentForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!principalPaymentForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!principalPaymentForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find Notes Payable account
     const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
-    if (!notesPayableAccount) {
-      notify.error('Error', 'Notes Payable account not found. Please create it first.');
-      return;
-    }
+    if (!notesPayableAccount) { notify.error('Error', 'Notes Payable account not found.'); return; }
 
     setSavingPrincipalPayment(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: principalPaymentInstrument.entity_id,
-          date: principalPaymentForm.date,
-          type: 'principal_payment',
-          memo: principalPaymentForm.memo || `Principal payment for ${principalPaymentInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Debit: Notes Payable (reduces liability)
-      // Credit: Cash (reduces asset)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: notesPayableAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: principalPaymentInstrument.id,
-            counterparty_id: principalPaymentInstrument.counterparty_id,
+      const memo = principalPaymentForm.memo || `Principal payment for ${principalPaymentInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: principalPaymentInstrument.entity_id,
+        request_type: 'principal_payment',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: principalPaymentInstrument.id,
+          transaction: {
+            entity_id: principalPaymentInstrument.entity_id,
+            date: principalPaymentForm.date,
+            type: 'principal_payment',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: principalPaymentForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: principalPaymentInstrument.id,
-            counterparty_id: principalPaymentInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Principal payment recorded successfully');
+          lines: [
+            { account_id: notesPayableAccount.id, debit: amount, credit: null, instrument_id: principalPaymentInstrument.id, counterparty_id: principalPaymentInstrument.counterparty_id },
+            { account_id: principalPaymentForm.cash_account_id, debit: null, credit: amount, instrument_id: principalPaymentInstrument.id, counterparty_id: principalPaymentInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Principal payment sent for approval');
       setPrincipalPaymentOpen(false);
-      
-      // Reload data to update positions
-      await loadData();
-      
-      // Reload instrument detail if expanded
-      if (expandedId === principalPaymentInstrument.id) {
-        loadInstrumentDetail(principalPaymentInstrument.id, principalPaymentInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record principal payment');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingPrincipalPayment(false);
     }
