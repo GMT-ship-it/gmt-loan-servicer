@@ -99,7 +99,7 @@ export default function FinanceEntities() {
     }
     setSaving(true);
     try {
-      const payload = {
+      const payload: Record<string, any> = {
         name: form.name.trim(),
         short_code: form.short_code.trim().toUpperCase(),
         parent_entity_id: form.parent_entity_id || null,
