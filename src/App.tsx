@@ -120,6 +120,13 @@ const App = () => (
                 </Guard>
               </ErrorBoundary>
             } />
+            <Route path="/admin/approvals" element={
+              <ErrorBoundary>
+                <Guard need={["admin"]}>
+                  <Approvals />
+                </Guard>
+              </ErrorBoundary>
+            } />
             <Route path="/borrower" element={
               <ErrorBoundary>
                 <Guard need={["borrower"]}>
