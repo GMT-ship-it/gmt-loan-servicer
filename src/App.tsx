@@ -22,6 +22,7 @@ import Reports from "./pages/admin/Reports";
 import FinanceInstruments from "./pages/admin/FinanceInstruments";
 import FinanceEntities from "./pages/admin/FinanceEntities";
 import FinanceCounterparties from "./pages/admin/FinanceCounterparties";
+import Approvals from "./pages/admin/Approvals";
 import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 
