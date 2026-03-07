@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useNotify } from '@/lib/notify';
 import { Plus, Pencil, Trash2, RefreshCw, Building2, Users, FileText, DollarSign, ChevronDown, ChevronRight, Banknote, PlayCircle, CreditCard, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { createApprovalRequest, type ApprovalRequestType } from '@/lib/approval-helpers';
 import AccruedInterestModal from '@/components/admin/AccruedInterestModal';
 import PrincipalDetailsModal from '@/components/admin/PrincipalDetailsModal';
 import PayoffDetailsModal from '@/components/admin/PayoffDetailsModal';
@@ -626,78 +627,40 @@ export default function FinanceInstruments() {
   const handleSaveFundsIn = async () => {
     if (!fundsInInstrument) return;
 
-    // Validation
-    if (!fundsInForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!fundsInForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(fundsInForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!fundsInForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!fundsInForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find Notes Payable account
     const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
-    if (!notesPayableAccount) {
-      notify.error('Error', 'Notes Payable account not found. Please create it first.');
-      return;
-    }
+    if (!notesPayableAccount) { notify.error('Error', 'Notes Payable account not found.'); return; }
 
     setSavingFundsIn(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: fundsInInstrument.entity_id,
-          date: fundsInForm.date,
-          type: 'funds_in',
-          memo: fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: fundsInForm.cash_account_id,
-            debit: amount,
-            credit: null,
-            instrument_id: fundsInInstrument.id,
-            counterparty_id: fundsInInstrument.counterparty_id,
+      const memo = fundsInForm.memo || `Funds received for ${fundsInInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: fundsInInstrument.entity_id,
+        request_type: 'disbursement',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: fundsInInstrument.id,
+          transaction: {
+            entity_id: fundsInInstrument.entity_id,
+            date: fundsInForm.date,
+            type: 'funds_in',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: notesPayableAccount.id,
-            debit: null,
-            credit: amount,
-            instrument_id: fundsInInstrument.id,
-            counterparty_id: fundsInInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Funds recorded successfully');
+          lines: [
+            { account_id: fundsInForm.cash_account_id, debit: amount, credit: null, instrument_id: fundsInInstrument.id, counterparty_id: fundsInInstrument.counterparty_id },
+            { account_id: notesPayableAccount.id, debit: null, credit: amount, instrument_id: fundsInInstrument.id, counterparty_id: fundsInInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Funds In sent for approval');
       setFundsInOpen(false);
-      
-      // Reload instrument detail if expanded
-      if (expandedId === fundsInInstrument.id) {
-        loadInstrumentDetail(fundsInInstrument.id, fundsInInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record funds');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingFundsIn(false);
     }
@@ -706,82 +669,42 @@ export default function FinanceInstruments() {
   const handleSaveInterestPaid = async () => {
     if (!interestPaidInstrument) return;
 
-    // Validation
-    if (!interestPaidForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!interestPaidForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(interestPaidForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!interestPaidForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!interestPaidForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find the debit account based on posting mode
     const debitAccountName = interestPaidForm.posting_mode === 'expense' ? 'Interest Expense' : 'Interest Payable';
     const debitAccountType = interestPaidForm.posting_mode === 'expense' ? 'expense' : 'liability';
     const debitAccount = accounts.find(a => a.name === debitAccountName && a.type === debitAccountType);
-    if (!debitAccount) {
-      notify.error('Error', `${debitAccountName} account not found. Please create it first.`);
-      return;
-    }
+    if (!debitAccount) { notify.error('Error', `${debitAccountName} account not found.`); return; }
 
     setSavingInterestPaid(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: interestPaidInstrument.entity_id,
-          date: interestPaidForm.date,
-          type: 'interest_paid',
-          memo: interestPaidForm.memo || `Interest paid for ${interestPaidInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Debit: Interest Expense or Interest Payable
-      // Credit: Cash
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: debitAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: interestPaidInstrument.id,
-            counterparty_id: interestPaidInstrument.counterparty_id,
+      const memo = interestPaidForm.memo || `Interest paid for ${interestPaidInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: interestPaidInstrument.entity_id,
+        request_type: 'interest_payment',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: interestPaidInstrument.id,
+          transaction: {
+            entity_id: interestPaidInstrument.entity_id,
+            date: interestPaidForm.date,
+            type: 'interest_paid',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: interestPaidForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: interestPaidInstrument.id,
-            counterparty_id: interestPaidInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Interest payment recorded successfully');
+          lines: [
+            { account_id: debitAccount.id, debit: amount, credit: null, instrument_id: interestPaidInstrument.id, counterparty_id: interestPaidInstrument.counterparty_id },
+            { account_id: interestPaidForm.cash_account_id, debit: null, credit: amount, instrument_id: interestPaidInstrument.id, counterparty_id: interestPaidInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Interest payment sent for approval');
       setInterestPaidOpen(false);
-      
-      // Reload instrument detail if expanded
-      if (expandedId === interestPaidInstrument.id) {
-        loadInstrumentDetail(interestPaidInstrument.id, interestPaidInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record interest payment');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingInterestPaid(false);
     }
@@ -790,83 +713,40 @@ export default function FinanceInstruments() {
   const handleSavePrincipalPayment = async () => {
     if (!principalPaymentInstrument) return;
 
-    // Validation
-    if (!principalPaymentForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!principalPaymentForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(principalPaymentForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!principalPaymentForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!principalPaymentForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find Notes Payable account
     const notesPayableAccount = accounts.find(a => a.name === 'Notes Payable' && a.type === 'liability');
-    if (!notesPayableAccount) {
-      notify.error('Error', 'Notes Payable account not found. Please create it first.');
-      return;
-    }
+    if (!notesPayableAccount) { notify.error('Error', 'Notes Payable account not found.'); return; }
 
     setSavingPrincipalPayment(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: principalPaymentInstrument.entity_id,
-          date: principalPaymentForm.date,
-          type: 'principal_payment',
-          memo: principalPaymentForm.memo || `Principal payment for ${principalPaymentInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Debit: Notes Payable (reduces liability)
-      // Credit: Cash (reduces asset)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: notesPayableAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: principalPaymentInstrument.id,
-            counterparty_id: principalPaymentInstrument.counterparty_id,
+      const memo = principalPaymentForm.memo || `Principal payment for ${principalPaymentInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: principalPaymentInstrument.entity_id,
+        request_type: 'principal_payment',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: principalPaymentInstrument.id,
+          transaction: {
+            entity_id: principalPaymentInstrument.entity_id,
+            date: principalPaymentForm.date,
+            type: 'principal_payment',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: principalPaymentForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: principalPaymentInstrument.id,
-            counterparty_id: principalPaymentInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Principal payment recorded successfully');
+          lines: [
+            { account_id: notesPayableAccount.id, debit: amount, credit: null, instrument_id: principalPaymentInstrument.id, counterparty_id: principalPaymentInstrument.counterparty_id },
+            { account_id: principalPaymentForm.cash_account_id, debit: null, credit: amount, instrument_id: principalPaymentInstrument.id, counterparty_id: principalPaymentInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Principal payment sent for approval');
       setPrincipalPaymentOpen(false);
-      
-      // Reload data to update positions
-      await loadData();
-      
-      // Reload instrument detail if expanded
-      if (expandedId === principalPaymentInstrument.id) {
-        loadInstrumentDetail(principalPaymentInstrument.id, principalPaymentInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record principal payment');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingPrincipalPayment(false);
     }
@@ -877,7 +757,6 @@ export default function FinanceInstruments() {
   const handleSaveFundsUsed = async () => {
     if (!fundsUsedInstrument) return;
 
-    // Validation
     if (!fundsUsedForm.date) {
       notify.error('Validation', 'Date is required');
       return;
@@ -892,7 +771,6 @@ export default function FinanceInstruments() {
       return;
     }
 
-    // Find Notes Receivable account
     const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
     if (!notesReceivableAccount) {
       notify.error('Error', 'Notes Receivable account not found. Please create it first.');
@@ -901,59 +779,42 @@ export default function FinanceInstruments() {
 
     setSavingFundsUsed(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: fundsUsedInstrument.entity_id,
-          date: fundsUsedForm.date,
-          type: 'disbursement',
-          memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Dr Notes Receivable = amount (increase asset)
-      // Cr Cash = amount (decrease asset)
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: notesReceivableAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: fundsUsedInstrument.id,
-            counterparty_id: fundsUsedInstrument.counterparty_id,
+      await createApprovalRequest({
+        entity_id: fundsUsedInstrument.entity_id,
+        request_type: 'disbursement',
+        amount,
+        reason: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
+        payload: {
+          instrument_id: fundsUsedInstrument.id,
+          transaction: {
+            entity_id: fundsUsedInstrument.entity_id,
+            date: fundsUsedForm.date,
+            type: 'disbursement',
+            memo: fundsUsedForm.memo || `Funds disbursed for ${fundsUsedInstrument.name}`,
           },
-          {
-            transaction_id: txn.id,
-            account_id: fundsUsedForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: fundsUsedInstrument.id,
-            counterparty_id: fundsUsedInstrument.counterparty_id,
-          },
-        ]);
+          lines: [
+            {
+              account_id: notesReceivableAccount.id,
+              debit: amount,
+              credit: null,
+              instrument_id: fundsUsedInstrument.id,
+              counterparty_id: fundsUsedInstrument.counterparty_id,
+            },
+            {
+              account_id: fundsUsedForm.cash_account_id,
+              debit: null,
+              credit: amount,
+              instrument_id: fundsUsedInstrument.id,
+              counterparty_id: fundsUsedInstrument.counterparty_id,
+            },
+          ],
+        },
+      });
 
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Funds disbursement recorded successfully');
+      notify.success('Submitted', 'Disbursement sent for approval');
       setFundsUsedOpen(false);
-      
-      // Reload data to update positions
-      await loadData();
-      
-      // Reload instrument detail if expanded
-      if (expandedId === fundsUsedInstrument.id) {
-        loadInstrumentDetail(fundsUsedInstrument.id, fundsUsedInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record funds');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingFundsUsed(false);
     }
@@ -962,7 +823,6 @@ export default function FinanceInstruments() {
   const handleSavePaymentReceived = async () => {
     if (!paymentReceivedInstrument) return;
 
-    // Validation
     if (!paymentReceivedForm.date) {
       notify.error('Validation', 'Date is required');
       return;
@@ -977,37 +837,27 @@ export default function FinanceInstruments() {
       return;
     }
 
-    // Find required accounts
     const notesReceivableAccount = accounts.find(a => a.name === 'Notes Receivable' && a.type === 'asset');
     const interestReceivableAccount = accounts.find(a => a.name === 'Interest Receivable' && a.type === 'asset');
-    
-    if (!notesReceivableAccount) {
-      notify.error('Error', 'Notes Receivable account not found. Please create it first.');
-      return;
-    }
-    if (!interestReceivableAccount) {
-      notify.error('Error', 'Interest Receivable account not found. Please create it first.');
+    if (!notesReceivableAccount || !interestReceivableAccount) {
+      notify.error('Error', 'Notes Receivable or Interest Receivable account not found.');
       return;
     }
 
     setSavingPaymentReceived(true);
     try {
-      // If toggle ON, call accrual catch-up up to payment date
+      // Optionally run accrual catch-up before computing allocation
       if (paymentReceivedForm.run_accrual) {
         try {
           await supabase.functions.invoke('accrue-interest', {
-            body: { 
-              run_date: paymentReceivedForm.date, 
-              mode: 'catch_up',
-              target_instrument_id: paymentReceivedInstrument.id,
-            },
+            body: { run_date: paymentReceivedForm.date, mode: 'catch_up', target_instrument_id: paymentReceivedInstrument.id },
           });
         } catch (accrualErr) {
-          console.warn('Accrual catch-up failed, continuing with payment:', accrualErr);
+          console.warn('Accrual catch-up failed, continuing:', accrualErr);
         }
       }
 
-      // Get accrued interest owed as-of payment date from daily positions
+      // Determine allocation from daily positions
       const { data: positionData } = await supabase
         .from('fin_instrument_daily_positions')
         .select('accrued_interest_balance')
@@ -1018,70 +868,42 @@ export default function FinanceInstruments() {
         .maybeSingle();
 
       const accruedInterestOwed = positionData?.accrued_interest_balance || 0;
-
-      // Allocate payment: interest first, then principal
       const interestPaid = Math.min(amount, accruedInterestOwed);
       const principalPaid = amount - interestPaid;
 
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: paymentReceivedInstrument.entity_id,
-          date: paymentReceivedForm.date,
-          type: 'payment_received',
-          memo: paymentReceivedForm.memo || `Payment received for ${paymentReceivedInstrument.name}${interestPaid > 0 ? ` (Interest: ${fmtMoney(interestPaid)}, Principal: ${fmtMoney(principalPaid)})` : ''}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Dr Cash = amount
-      // Cr Interest Receivable = interestPaid (if > 0)
-      // Cr Notes Receivable = principalPaid (if > 0)
+      // Build ledger lines
       const lines: any[] = [
-        {
-          transaction_id: txn.id,
-          account_id: paymentReceivedForm.cash_account_id,
-          debit: amount,
-          credit: null,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        },
+        { account_id: paymentReceivedForm.cash_account_id, debit: amount, credit: null, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id },
       ];
-
       if (interestPaid > 0) {
-        lines.push({
-          transaction_id: txn.id,
-          account_id: interestReceivableAccount.id,
-          debit: null,
-          credit: interestPaid,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        });
+        lines.push({ account_id: interestReceivableAccount.id, debit: null, credit: interestPaid, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id });
       }
-
       if (principalPaid > 0) {
-        lines.push({
-          transaction_id: txn.id,
-          account_id: notesReceivableAccount.id,
-          debit: null,
-          credit: principalPaid,
-          instrument_id: paymentReceivedInstrument.id,
-          counterparty_id: paymentReceivedInstrument.counterparty_id,
-        });
+        lines.push({ account_id: notesReceivableAccount.id, debit: null, credit: principalPaid, instrument_id: paymentReceivedInstrument.id, counterparty_id: paymentReceivedInstrument.counterparty_id });
       }
 
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert(lines);
+      const memo = paymentReceivedForm.memo || `Payment received for ${paymentReceivedInstrument.name} (Interest: ${fmtMoney(interestPaid)}, Principal: ${fmtMoney(principalPaid)})`;
 
-      if (linesError) throw linesError;
+      await createApprovalRequest({
+        entity_id: paymentReceivedInstrument.entity_id,
+        request_type: 'payment_received',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: paymentReceivedInstrument.id,
+          interest_paid: interestPaid,
+          principal_paid: principalPaid,
+          transaction: {
+            entity_id: paymentReceivedInstrument.entity_id,
+            date: paymentReceivedForm.date,
+            type: 'payment_received',
+            memo,
+          },
+          lines,
+        },
+      });
 
-      notify.success('Success', `Payment recorded: ${fmtMoney(interestPaid)} to interest, ${fmtMoney(principalPaid)} to principal`);
+      notify.success('Submitted', 'Payment received sent for approval');
       setPaymentReceivedOpen(false);
       
       // Reload data to update positions

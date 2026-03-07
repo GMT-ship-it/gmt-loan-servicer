@@ -149,6 +149,13 @@ export default function AppShell() {
                   >
                     Reports
                   </Link>
+                  <Link
+                    to="/admin/approvals"
+                    aria-current={pathname === '/admin/approvals' ? 'page' : undefined}
+                    className={`hover:text-primary whitespace-nowrap transition-colors ${pathname === '/admin/approvals' ? 'text-foreground font-semibold' : 'text-foreground/80'}`}
+                  >
+                    Approvals
+                  </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger className={`flex items-center gap-1 hover:text-primary whitespace-nowrap transition-colors ${pathname.startsWith('/admin/finance') ? 'text-foreground font-semibold' : 'text-foreground/80'}`}>
                       Finance

@@ -1356,6 +1356,56 @@ export type Database = {
           },
         ]
       }
+      gmt_approval_requests: {
+        Row: {
+          amount: number
+          approved_by: string | null
+          created_at: string
+          entity_id: string
+          id: string
+          payload: Json
+          reason: string | null
+          request_type: Database["public"]["Enums"]["gmt_approval_request_type"]
+          requested_by: string
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["gmt_approval_status"]
+        }
+        Insert: {
+          amount: number
+          approved_by?: string | null
+          created_at?: string
+          entity_id: string
+          id?: string
+          payload?: Json
+          reason?: string | null
+          request_type: Database["public"]["Enums"]["gmt_approval_request_type"]
+          requested_by: string
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["gmt_approval_status"]
+        }
+        Update: {
+          amount?: number
+          approved_by?: string | null
+          created_at?: string
+          entity_id?: string
+          id?: string
+          payload?: Json
+          reason?: string | null
+          request_type?: Database["public"]["Enums"]["gmt_approval_request_type"]
+          requested_by?: string
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["gmt_approval_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmt_approval_requests_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "gmt_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmt_entities: {
         Row: {
           created_at: string
@@ -2991,6 +3041,15 @@ export type Database = {
       entity_status: "active" | "inactive" | "winding_down"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
+      gmt_approval_request_type:
+        | "disbursement"
+        | "payment_received"
+        | "interest_payment"
+        | "principal_payment"
+        | "adjustment"
+        | "write_off"
+        | "transfer"
+      gmt_approval_status: "pending" | "approved" | "rejected" | "cancelled"
       gmt_ledger_event_type:
         | "capital_call"
         | "distribution"
@@ -3160,6 +3219,16 @@ export const Constants = {
       entity_status: ["active", "inactive", "winding_down"],
       facility_status: ["active", "paused", "closed"],
       facility_type: ["revolving", "single_loan"],
+      gmt_approval_request_type: [
+        "disbursement",
+        "payment_received",
+        "interest_payment",
+        "principal_payment",
+        "adjustment",
+        "write_off",
+        "transfer",
+      ],
+      gmt_approval_status: ["pending", "approved", "rejected", "cancelled"],
       gmt_ledger_event_type: [
         "capital_call",
         "distribution",
