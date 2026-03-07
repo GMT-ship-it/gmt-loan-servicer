@@ -1356,6 +1356,50 @@ export type Database = {
           },
         ]
       }
+      gmt_entities: {
+        Row: {
+          created_at: string
+          id: string
+          jurisdiction: string | null
+          name: string
+          parent_entity_id: string | null
+          reporting_currency: string
+          short_code: string
+          status: Database["public"]["Enums"]["entity_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jurisdiction?: string | null
+          name: string
+          parent_entity_id?: string | null
+          reporting_currency?: string
+          short_code: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jurisdiction?: string | null
+          name?: string
+          parent_entity_id?: string | null
+          reporting_currency?: string
+          short_code?: string
+          status?: Database["public"]["Enums"]["entity_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmt_entities_parent_entity_id_fkey"
+            columns: ["parent_entity_id"]
+            isOneToOne: false
+            referencedRelation: "gmt_entities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journal_entries: {
         Row: {
           account_code: string
@@ -2814,6 +2858,7 @@ export type Database = {
         | "approved"
         | "rejected"
       decision_status: "submitted" | "under_review" | "approved" | "rejected"
+      entity_status: "active" | "inactive" | "winding_down"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
       industry_sector:
@@ -2972,6 +3017,7 @@ export const Constants = {
         "rejected",
       ],
       decision_status: ["submitted", "under_review", "approved", "rejected"],
+      entity_status: ["active", "inactive", "winding_down"],
       facility_status: ["active", "paused", "closed"],
       facility_type: ["revolving", "single_loan"],
       industry_sector: [
