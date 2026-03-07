@@ -99,12 +99,12 @@ export default function FinanceEntities() {
     }
     setSaving(true);
     try {
-      const payload: Record<string, any> = {
+      const payload = {
         name: form.name.trim(),
         short_code: form.short_code.trim().toUpperCase(),
         parent_entity_id: form.parent_entity_id || null,
         jurisdiction: form.jurisdiction.trim() || null,
-        status: form.status as string,
+        status: form.status as 'active' | 'inactive' | 'winding_down',
         reporting_currency: form.reporting_currency.trim() || 'USD',
       };
 
