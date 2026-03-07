@@ -1400,6 +1400,135 @@ export type Database = {
           },
         ]
       }
+      gmt_ledger_events: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entity_id: string
+          event_date: string
+          event_type: Database["public"]["Enums"]["gmt_ledger_event_type"]
+          external_ref: string | null
+          id: string
+          instrument_id: string | null
+          memo: string | null
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entity_id: string
+          event_date: string
+          event_type: Database["public"]["Enums"]["gmt_ledger_event_type"]
+          external_ref?: string | null
+          id?: string
+          instrument_id?: string | null
+          memo?: string | null
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string
+          event_date?: string
+          event_type?: Database["public"]["Enums"]["gmt_ledger_event_type"]
+          external_ref?: string | null
+          id?: string
+          instrument_id?: string | null
+          memo?: string | null
+          source?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmt_ledger_events_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "gmt_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmt_ledger_events_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "fin_instruments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gmt_ledger_lines: {
+        Row: {
+          account_id: string
+          counterparty_id: string | null
+          created_at: string
+          credit: number | null
+          debit: number | null
+          entity_id: string | null
+          event_id: string
+          id: string
+          instrument_id: string | null
+        }
+        Insert: {
+          account_id: string
+          counterparty_id?: string | null
+          created_at?: string
+          credit?: number | null
+          debit?: number | null
+          entity_id?: string | null
+          event_id: string
+          id?: string
+          instrument_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          counterparty_id?: string | null
+          created_at?: string
+          credit?: number | null
+          debit?: number | null
+          entity_id?: string | null
+          event_id?: string
+          id?: string
+          instrument_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmt_ledger_lines_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "fin_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmt_ledger_lines_counterparty_id_fkey"
+            columns: ["counterparty_id"]
+            isOneToOne: false
+            referencedRelation: "fin_counterparties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmt_ledger_lines_entity_id_fkey"
+            columns: ["entity_id"]
+            isOneToOne: false
+            referencedRelation: "gmt_entities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmt_ledger_lines_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "gmt_ledger_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmt_ledger_lines_instrument_id_fkey"
+            columns: ["instrument_id"]
+            isOneToOne: false
+            referencedRelation: "fin_instruments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journal_entries: {
         Row: {
           account_code: string
@@ -2696,6 +2825,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      gmt_ledger_balanced: { Args: { p_event_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2861,6 +2991,16 @@ export type Database = {
       entity_status: "active" | "inactive" | "winding_down"
       facility_status: "active" | "paused" | "closed"
       facility_type: "revolving" | "single_loan"
+      gmt_ledger_event_type:
+        | "capital_call"
+        | "distribution"
+        | "disbursement"
+        | "payment_received"
+        | "interest_accrual"
+        | "fee"
+        | "transfer"
+        | "adjustment"
+        | "journal"
       industry_sector:
         | "manufacturing"
         | "wholesale"
@@ -3020,6 +3160,17 @@ export const Constants = {
       entity_status: ["active", "inactive", "winding_down"],
       facility_status: ["active", "paused", "closed"],
       facility_type: ["revolving", "single_loan"],
+      gmt_ledger_event_type: [
+        "capital_call",
+        "distribution",
+        "disbursement",
+        "payment_received",
+        "interest_accrual",
+        "fee",
+        "transfer",
+        "adjustment",
+        "journal",
+      ],
       industry_sector: [
         "manufacturing",
         "wholesale",
