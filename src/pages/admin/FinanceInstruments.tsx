@@ -707,82 +707,42 @@ export default function FinanceInstruments() {
   const handleSaveInterestPaid = async () => {
     if (!interestPaidInstrument) return;
 
-    // Validation
-    if (!interestPaidForm.date) {
-      notify.error('Validation', 'Date is required');
-      return;
-    }
+    if (!interestPaidForm.date) { notify.error('Validation', 'Date is required'); return; }
     const amount = parseFloat(interestPaidForm.amount);
-    if (isNaN(amount) || amount <= 0) {
-      notify.error('Validation', 'Amount must be greater than 0');
-      return;
-    }
-    if (!interestPaidForm.cash_account_id) {
-      notify.error('Validation', 'Cash account is required');
-      return;
-    }
+    if (isNaN(amount) || amount <= 0) { notify.error('Validation', 'Amount must be greater than 0'); return; }
+    if (!interestPaidForm.cash_account_id) { notify.error('Validation', 'Cash account is required'); return; }
 
-    // Find the debit account based on posting mode
     const debitAccountName = interestPaidForm.posting_mode === 'expense' ? 'Interest Expense' : 'Interest Payable';
     const debitAccountType = interestPaidForm.posting_mode === 'expense' ? 'expense' : 'liability';
     const debitAccount = accounts.find(a => a.name === debitAccountName && a.type === debitAccountType);
-    if (!debitAccount) {
-      notify.error('Error', `${debitAccountName} account not found. Please create it first.`);
-      return;
-    }
+    if (!debitAccount) { notify.error('Error', `${debitAccountName} account not found.`); return; }
 
     setSavingInterestPaid(true);
     try {
-      // Create transaction
-      const { data: txn, error: txnError } = await supabase
-        .from('fin_transactions')
-        .insert({
-          entity_id: interestPaidInstrument.entity_id,
-          date: interestPaidForm.date,
-          type: 'interest_paid',
-          memo: interestPaidForm.memo || `Interest paid for ${interestPaidInstrument.name}`,
-          source: 'manual',
-        })
-        .select()
-        .single();
-
-      if (txnError) throw txnError;
-
-      // Create transaction lines (double-entry)
-      // Debit: Interest Expense or Interest Payable
-      // Credit: Cash
-      const { error: linesError } = await supabase
-        .from('fin_transaction_lines')
-        .insert([
-          {
-            transaction_id: txn.id,
-            account_id: debitAccount.id,
-            debit: amount,
-            credit: null,
-            instrument_id: interestPaidInstrument.id,
-            counterparty_id: interestPaidInstrument.counterparty_id,
+      const memo = interestPaidForm.memo || `Interest paid for ${interestPaidInstrument.name}`;
+      await createApprovalRequest({
+        entity_id: interestPaidInstrument.entity_id,
+        request_type: 'interest_payment',
+        amount,
+        reason: memo,
+        payload: {
+          instrument_id: interestPaidInstrument.id,
+          transaction: {
+            entity_id: interestPaidInstrument.entity_id,
+            date: interestPaidForm.date,
+            type: 'interest_paid',
+            memo,
           },
-          {
-            transaction_id: txn.id,
-            account_id: interestPaidForm.cash_account_id,
-            debit: null,
-            credit: amount,
-            instrument_id: interestPaidInstrument.id,
-            counterparty_id: interestPaidInstrument.counterparty_id,
-          },
-        ]);
-
-      if (linesError) throw linesError;
-
-      notify.success('Success', 'Interest payment recorded successfully');
+          lines: [
+            { account_id: debitAccount.id, debit: amount, credit: null, instrument_id: interestPaidInstrument.id, counterparty_id: interestPaidInstrument.counterparty_id },
+            { account_id: interestPaidForm.cash_account_id, debit: null, credit: amount, instrument_id: interestPaidInstrument.id, counterparty_id: interestPaidInstrument.counterparty_id },
+          ],
+        },
+      });
+      notify.success('Submitted', 'Interest payment sent for approval');
       setInterestPaidOpen(false);
-      
-      // Reload instrument detail if expanded
-      if (expandedId === interestPaidInstrument.id) {
-        loadInstrumentDetail(interestPaidInstrument.id, interestPaidInstrument.position);
-      }
     } catch (err: any) {
-      notify.error('Error', err.message || 'Failed to record interest payment');
+      notify.error('Error', err.message || 'Failed to submit approval request');
     } finally {
       setSavingInterestPaid(false);
     }
