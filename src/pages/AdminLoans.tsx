@@ -3,9 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Loan } from "@/types/domain";
 import { NewLoanWizard } from "@/components/loans/NewLoanWizard";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import EmptyState from "@/components/EmptyState";
+import Papa from "papaparse";
 
 export default function AdminLoans() {
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -34,14 +35,41 @@ export default function AdminLoans() {
     }
   }
 
+  const handleExportCSV = () => {
+    const csvContent = loans.map(loan => ({
+      "Loan #": loan.loan_number,
+      "Borrower ID": loan.borrower_id,
+      "Principal": loan.principal,
+      "Rate": `${(loan.interest_rate * 100).toFixed(2)}%`,
+      "Status": loan.status,
+      "Created At": new Date(loan.created_at).toLocaleDateString()
+    }));
+    
+    const csv = Papa.unparse(csvContent);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `loans_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-semibold">Loans</h1>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Loan
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+          <Button onClick={() => setOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Loan
+          </Button>
+        </div>
       </div>
 
       {loading ? (
