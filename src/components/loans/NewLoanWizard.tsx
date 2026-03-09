@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Borrower, Loan } from "@/types/domain";
+import { sendEnvelope } from "@/services/docusign";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -278,6 +279,22 @@ export function NewLoanWizard({ onClose, onCreated }: Props) {
       }
 
       toast({ title: "Loan created successfully" });
+
+      // Send DocuSign envelope internally
+      try {
+        const { data: borrowerInfo } = await supabase.from('borrowers').select('*').eq('id', borrowerId).single();
+        if (borrowerInfo && borrowerInfo.email) {
+            await sendEnvelope(data.id, borrowerInfo.email, borrowerInfo.legal_name || 'Borrower');
+            // Mark as sent
+            await supabase.from('loans').update({ status: 'pending_signature' }).eq('id', data.id);
+            toast({ title: "DocuSign envelope sent automatically." });
+        }
+      } catch (err) {
+        console.error("DocuSign error:", err);
+        toast({ title: "Failed to send DocuSign envelope", variant: "destructive" });
+      }
+
+
       onCreated();
     } catch (err: any) {
       toast({

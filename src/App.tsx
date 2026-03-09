@@ -16,6 +16,7 @@ import Admin from "./pages/Admin";
 import AdminCovenants from "./pages/AdminCovenants";
 import AdminLoans from "./pages/AdminLoans";
 import AdminLoanDetail from "./pages/AdminLoanDetail";
+import AdminUsers from "./pages/admin/Users";
 import Analytics from "./pages/Analytics";
 import Borrower from "./pages/Borrower";
 import BorrowerLoanDetail from "./pages/portal/LoanDetail";
@@ -167,6 +168,13 @@ const App = () => (
           } />
           
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/admin/users" element={
+              <ErrorBoundary>
+                <Guard need={["admin", "analyst"]}>
+                  <AdminUsers />
+                </Guard>
+              </ErrorBoundary>
+            } />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

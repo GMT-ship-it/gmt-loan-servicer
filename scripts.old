@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import requests
+from datetime import datetime
+
+# Load env from .env if present
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            if line.strip() and '=' in line:
+                k,v = line.strip().split('=',1)
+                os.environ.setdefault(k, v)
+
+SUPABASE_URL = os.environ.get('SUPABASE_URL') or 'https://your-supabase-url.supabase.co'
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or ''
+REALM_ID = os.environ.get('QBO_REALM_ID') or ''
+QBO_BASE = f'https://quickbooks.api.intuit.com/v3/company/{REALM_ID}'
+QBO_ACCESS_TOKEN = os.environ.get('QBO_ACCESS_TOKEN') or ''
+QBO_REFRESH_TOKEN = os.environ.get('QBO_REFRESH_TOKEN') or ''
+QBO_CLIENT_ID = os.environ.get('QBO_CLIENT_ID') or ''
+QBO_CLIENT_SECRET = os.environ.get('QBO_CLIENT_SECRET') or ''
+
+HEADERS = {
+    'Authorization': f'Bearer {QBO_ACCESS_TOKEN}',
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+}
+
+SUPA_HEADERS = {
+    'Authorization': f'Bearer {SUPABASE_SERVICE_ROLE_KEY}',
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+}
+
+DB_PAYMENTS = f"{SUPABASE_URL}/rest/v1/payments?select=id,amount,date,customer_id,status"
+DB_LOANS = f"{SUPABASE_URL}/rest/v1/loans?select=id,principal,date,customer_id,status"
+
+# Helpers
+
+def qb_post(endpoint, payload):
+    url = QBO_BASE + endpoint
+    r = requests.post(url, headers=HEADERS, json=payload)
+    return r
+
+
+def ensure_token():
+    global QBO_ACCESS_TOKEN, HEADERS
+    if not QBO_ACCESS_TOKEN:
+        return False
+    HEADERS['Authorization'] = f'Bearer {QBO_ACCESS_TOKEN}'
+    return True
+
+# Step 1: fetch new payments to sync as Sales Receipts
+def fetch_new_payments():
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return []
+    r = requests.get(DB_PAYMENTS, headers=SUPA_HEADERS)
+    if r.status_code != 200:
+        return []
+    data = r.json()
+    # expect array
+    return data
+
+# Step 2: fetch new loans to sync as Invoices (receivables)
+
+def fetch_new_loans():
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return []
+    r = requests.get(DB_LOANS, headers=SUPA_HEADERS)
+    if r.status_code != 200:
+        return []
+    return r.json()
+
+# Step 3: create QuickBooks records
+
+def sync_payment_as_salesreceipt(p):
+    payload = {
+        "Line": [
+            {
+                "Amount": float(p['amount']),
+                "DetailType": "SalesItemLineDetail",
+                "SalesItemLineDetail": {
+                    "ItemRef": {"value": "1", "name": "Services"},
+                    "Qty": 1
+                }
+            }
+        ],
+        "CustomerRef": {"value": str(p.get('customer_id','0'))},
+        "DocDate": p.get('date')
+    }
+    r = qb_post('/salesreceipt', payload)
+    return r
+
+
+def sync_loan_as_invoice(l):
+    payload = {
+        "Line": [
+            {
+                "Amount": float(l['principal']),
+                "DetailType": "SalesItemLineDetail",
+                "SalesItemLineDetail": {
+                    "ItemRef": {"value": "2", "name": "Loan Principal"},
+                    "Qty": 1
+                }
+            }
+        ],
+        "CustomerRef": {"value": str(l.get('customer_id','0'))},
+        "DocDate": l.get('date')
+    }
+    r = qb_post('/invoice', payload)
+    return r
+
+
+def main():
+    # 1) fetch new data
+    payments = fetch_new_payments()
+    loans = fetch_new_loans()
+    if not payments and not loans:
+        print('No new records to sync')
+        return
+    # 2) sync
+    for p in payments:
+        try:
+            r = sync_payment_as_salesreceipt(p)
+            if r.status_code//100 == 2:
+                print(f"Synced payment {p.get('id')} -> SalesReceipt")
+            else:
+                print(f"Failed to sync payment {p.get('id')}: {r.text}")
+        except Exception as e:
+            print(f"Error syncing payment {p.get('id')}: {e}")
+    for l in loans:
+        try:
+            r = sync_loan_as_invoice(l)
+            if r.status_code//100 == 2:
+                print(f"Synced loan {l.get('id')} -> Invoice")
+            else:
+                print(f"Failed to sync loan {l.get('id')}: {r.text}")
+        except Exception as e:
+            print(f"Error syncing loan {l.get('id')}: {e}")
+
+if __name__ == '__main__':
+    main()
