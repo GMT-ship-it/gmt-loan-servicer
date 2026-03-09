@@ -38,7 +38,8 @@ export async function inviteUserByEmail(email: string, role: UserRole, invitedBy
     throw error;
   }
   // Set role in a separate users table (denormalized roles)
-  await supabase.from('users').upsert({ id: data?.user?.id || data?.id, email, role }).eq('email', email);
+  const userId = data && 'user' in data && data.user ? data.user.id : (data as any)?.id;
+  await supabase.from('users').upsert({ id: userId, email, role }).eq('email', email);
   await logAudit({ action: 'invite', target_email: email, role, performed_by: invitedBy, details: 'Invited user via email' });
   return data;
 }
