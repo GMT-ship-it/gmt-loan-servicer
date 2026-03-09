@@ -31,38 +31,38 @@ serve(async (req) => {
       );
     }
 
+    // Always require authentication - no unauthenticated admin creation
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check if there are any existing admins
     const { count: adminCount } = await supabaseAdmin
       .from('user_roles')
       .select('*', { count: 'exact', head: true })
-      .eq('role', 'lender_admin');
+      .eq('role', 'admin');
 
-    // If there are admins, verify the caller is an admin
+    // If admins exist, verify the caller is an admin
     if (adminCount && adminCount > 0) {
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-      
-      if (userError || !user) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      // Check if the caller is an admin
       const { data: roleData } = await supabaseAdmin
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
-        .eq('role', 'lender_admin')
+        .eq('role', 'admin')
         .single();
 
       if (!roleData) {
@@ -108,12 +108,12 @@ serve(async (req) => {
       }
     }
 
-    // Assign lender_admin role
+    // Assign admin role
     const { error: roleError } = await supabaseAdmin
       .from('user_roles')
       .insert({
         user_id: userData.user.id,
-        role: 'lender_admin',
+        role: 'admin',
         organization_id: orgId
       });
 
