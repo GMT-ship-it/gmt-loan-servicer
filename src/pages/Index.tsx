@@ -460,9 +460,8 @@ const Index = () => {
             <div>
               <h5 className="font-semibold mb-4">Contact</h5>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>info@mountaininvestments.com</li>
-                <li>1-800-MTN-INVST</li>
-                <li>New York, NY</li>
+                <li>rafael.iglesias@gmtcapitalgroup.com</li>
+                <li>Houston, TX</li>
               </ul>
             </div>
           </div>
