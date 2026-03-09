@@ -108,12 +108,12 @@ serve(async (req) => {
       }
     }
 
-    // Assign lender_admin role
+    // Assign admin role
     const { error: roleError } = await supabaseAdmin
       .from('user_roles')
       .insert({
         user_id: userData.user.id,
-        role: 'lender_admin',
+        role: 'admin',
         organization_id: orgId
       });
 
