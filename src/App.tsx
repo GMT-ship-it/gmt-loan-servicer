@@ -171,3 +171,6 @@ const App = () => (
 );
 
 export default App;
+import { BorrowerDashboard } from "./components/BorrowerDashboard";
+// Rendering BorrowerDashboard
+<BorrowerDashboard />
