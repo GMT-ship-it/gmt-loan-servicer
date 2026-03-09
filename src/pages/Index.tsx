@@ -467,7 +467,7 @@ const Index = () => {
           </div>
           
           <div className="border-t border-white/10 pt-8 text-center text-sm text-muted-foreground">
-            <p>&copy; 2025 Mountain Investments. All rights reserved.</p>
+            <p>&copy; 2025 Mountain Investments LLC. All rights reserved.</p>
           </div>
         </div>
       </footer>
