@@ -10,6 +10,8 @@ import Index from "./pages/Index";
 import Apply from "./pages/Apply";
 import Login from "./pages/Login";
 import Portal from "./pages/Portal";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import Admin from "./pages/Admin";
 import AdminCovenants from "./pages/AdminCovenants";
 import AdminLoans from "./pages/AdminLoans";
@@ -45,6 +47,8 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/apply" element={<Apply />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/portal" element={<Portal />} />

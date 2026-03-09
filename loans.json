@@ -1,0 +1,24 @@
+[
+  {
+    "loan_id":"L001",
+    "account_name":"Acme Corp - ABC Building",
+    "principal":100000,
+    "balance":85000,
+    "annualRate":0.05,
+    "schedule": [
+      {"due":"2026-04-01","principal":2000,"interest":60,"paid":true},{"due":"2026-05-01","principal":2000,"interest":55,"paid":false}
+    ],
+    "status":"active"
+  },
+  {
+    "loan_id":"L002",
+    "account_name":"Beta LLC - Equipment",
+    "principal":50000,
+    "balance":12000,
+    "annualRate":0.06,
+    "schedule": [
+      {"due":"2026-03-25","principal":1500,"interest":40,"paid":true},{"due":"2026-04-25","principal":1500,"interest":38,"paid":false}
+    ],
+    "status":"delinquent"
+  }
+]
