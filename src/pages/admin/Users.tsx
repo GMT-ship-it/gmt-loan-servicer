@@ -25,7 +25,7 @@ const AdminUsers = () => {
   const { data: auditLogs } = useQuery({
     queryKey: ["admin", "audit_trail"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("audit_trail").select("*").order("created_at", { ascending: false }).limit(50);
+      const { data, error } = await supabase.from("audit_log").select("*").order("created_at", { ascending: false }).limit(50);
       if (error) throw error;
       return data;
     },
@@ -106,8 +106,8 @@ const AdminUsers = () => {
                 {auditLogs?.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-medium text-sm">{log.action}</TableCell>
-                    <TableCell className="text-sm">{log.entity_type} <span className="text-muted-foreground font-mono text-xs ml-1">{log.entity_id?.substring(0,8)}</span></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(log.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-sm">{log.table_name} <span className="text-muted-foreground font-mono text-xs ml-1">{log.record_id?.substring(0,8)}</span></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</TableCell>
                   </TableRow>
                 ))}
                 {(!auditLogs || auditLogs.length === 0) && (
